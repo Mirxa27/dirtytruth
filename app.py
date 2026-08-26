@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import threading
 import time
 import requests
 from flask import Flask, request, jsonify, send_from_directory
@@ -23,11 +24,73 @@ from game_logic import (
 from languages import LANGUAGES, get_lang, language_directive, tts_voice
 import rooms
 
-LLM_URL = os.environ.get("LLM_URL", "https://445ed4fc-4d66-45d9-a917-4eb71ac706a4.app.us-east-va.ai.cloud.ovh.us/v1/chat/completions")
-LLM_KEY = os.environ.get("LLM_KEY", "31532b41b8afe2af7fa0e34aac1b184d4bfddb3f450c9366139354753cb45b9d")
-LLM_MODEL = os.environ.get("LLM_MODEL", "/tmp/models/qwen38-27b-q8kp.gguf")
+
+def _load_secrets(path=None):
+    """Populate os.environ from a gitignored secrets.env next to this file.
+
+    Real environment variables always win, so Vercel/heroku-style config is
+    unaffected. Returns nothing; safe to call before config reads.
+    """
+    if path is None:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "secrets.env")
+    try:
+        with open(path) as fh:
+            for line in fh:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, _, v = line.partition("=")
+                k, v = k.strip(), v.strip().strip('"').strip("'")
+                if k and k not in os.environ:
+                    os.environ[k] = v
+    except OSError:
+        pass
+
+
+_load_secrets()
+
+LLM_URL = os.environ.get("LLM_URL", "")
+LLM_KEY = os.environ.get("LLM_KEY", "")
+LLM_MODEL = os.environ.get("LLM_MODEL", "local-model")
 TTS_URL = os.environ.get("TTS_URL", "http://127.0.0.1:8880/v1/audio/speech")
 TTS_VOICE = os.environ.get("TTS_VOICE", "af_heart")
+
+
+# ---------------------------------------------------------------------------
+# Rate limiting — cheap in-process sliding window (per IP), protects the
+# expensive LLM/TTS proxy endpoints on a public URL.
+# ---------------------------------------------------------------------------
+RATE_LIMITS = {
+    "/api/generate": int(os.environ.get("DT_RL_GENERATE", "12") or 0),  # per minute
+    "/api/chat": int(os.environ.get("DT_RL_CHAT", "20") or 0),
+    "/api/tts": int(os.environ.get("DT_RL_TTS", "20") or 0),
+}
+_rl_hits = {}
+_rl_lock = threading.Lock()
+
+
+def _rate_limited(path):
+    """True if the client IP exceeded the limit for `path` this minute."""
+    limit = RATE_LIMITS.get(path, 0)
+    if limit <= 0:
+        return False
+    now = time.time()
+    ip = (request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+          or request.remote_addr or "?")
+    window_start = now - 60.0
+    with _rl_lock:
+        hits = _rl_hits.setdefault(path, {})
+        bucket = [t for t in hits.get(ip, ()) if t > window_start]
+        if len(bucket) >= limit:
+            hits[ip] = bucket
+            return True
+        bucket.append(now)
+        hits[ip] = bucket
+        # opportunistic GC so the dict never grows without bound
+        if len(hits) > 4096:
+            for k in [k2 for k2, v in hits.items() if not v or max(v) < window_start]:
+                hits.pop(k, None)
+    return False
 
 app = Flask(__name__, static_folder="static", static_url_path="")
 app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024  # 1 MB request cap
@@ -43,6 +106,13 @@ def security_headers(resp):
     resp.headers.setdefault("X-Frame-Options", "DENY")
     resp.headers.setdefault("Referrer-Policy", "no-referrer")
     resp.headers.setdefault("Cache-Control", "no-store")
+    resp.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; "
+        "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "
+        "connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; "
+        "frame-ancestors 'none'",
+    )
     return resp
 
 
@@ -225,6 +295,8 @@ def health():
 
 @app.route("/api/tts", methods=["POST"])
 def tts():
+    if _rate_limited("/api/tts"):
+        return jsonify({"error": "rate limited"}), 429
     data = request.get_json(force=True, silent=True) or {}
     text = str(data.get("text", ""))[:1200]
     if not text.strip():
@@ -334,6 +406,8 @@ def _translate_challenge(title, steps, lang_code):
 
 @app.route("/api/generate", methods=["POST"])
 def generate():
+    if _rate_limited("/api/generate"):
+        return jsonify({"error": "rate limited"}), 429
     data = request.get_json(force=True, silent=True)
     if not isinstance(data, dict):
         data = {}
@@ -408,6 +482,8 @@ def generate():
 
 @app.route("/api/chat", methods=["POST"])
 def chat():
+    if _rate_limited("/api/chat"):
+        return jsonify({"error": "rate limited"}), 429
     data = request.get_json(force=True, silent=True)
     if not isinstance(data, dict):
         data = {}
@@ -536,11 +612,20 @@ def room_join():
     name = str(data.get("name", "Player"))[:30].strip() or "Player"
     gender = str(data.get("gender", "partner"))[:20].strip() or "partner"
     room = rooms.get_room(code)
-    if not room:
+    if not room or not room["state"].get("players"):
         return jsonify({"error": "room not found"}), 404
+    players = room["state"]["players"]
+    guest = next((p for p in players if p.get("role") == "guest"), None)
+    if guest is None:
+        return jsonify({"error": "room not found"}), 404
+    if guest.get("joined") and guest.get("name") != name:
+        return jsonify({"error": "room full"}), 409
     state, version = rooms.update_room(code, lambda s: (
-        s["players"][1].update({"name": name, "gender": gender, "joined": True})
+        s["players"][next(i for i, p in enumerate(s["players"]) if p.get("role") == "guest")]
+        .update({"name": name, "gender": gender, "joined": True})
     ))
+    if state is None:
+        return jsonify({"error": "room not found"}), 404
     rooms.append_event(code, "joined", {"name": name})
     return jsonify({"code": code, "state": state, "version": version})
 
@@ -666,10 +751,21 @@ def create_app():
     return app
 
 
+def _prune_loop(stop_event, interval=3600):
+    """Hourly janitor: drop rooms idle past the retention window."""
+    while not stop_event.wait(interval):
+        try:
+            rooms.prune_rooms()
+        except Exception:
+            pass
+
+
 def main():
     """Production entrypoint — waitress WSGI server (threaded, no dev-server warnings)."""
     rooms.init_db()
     rooms.prune_rooms()
+    threading.Thread(target=_prune_loop, args=(threading.Event(),),
+                     daemon=True, name="room-pruner").start()
     from waitress import serve
     serve(
         app,

@@ -50,6 +50,7 @@ const documentStub = {
   },
   querySelectorAll() { return []; },
   createElement() { return makeEl("dyn"); },
+  addEventListener() {}, removeEventListener() {},
   documentElement: { lang: "en", style: { setProperty(){} } },
   body: { classList: { _set: new Set(), add(){}, remove(){}, toggle(){}, contains(){ return false; } } },
 };
@@ -186,6 +187,52 @@ check("Japanese spin", sandbox.window.t("spin").includes("ボトル"));
 sandbox.window.setUiLang("ar");
 check("Arabic spin", sandbox.window.t("spin").includes("القارورة"));
 sandbox.window.setUiLang("en");
+
+/* ---- 10. v5.1 i18n parity (new keys in every language) ---- */
+console.log("\n[v5.1 i18n parity]");
+const NEW_KEYS = ["roomWatching","roomGone","resynced","spinSpinning","craftTruth","craftDare","netFail","skipConfirm","refuseConfirm"];
+const LANGS = ["en","es","fr","de","it","pt","hi","ja","zh","ar"];
+check("all langs have new v5.1 keys", LANGS.every(l => NEW_KEYS.every(k =>
+  typeof I18N[l][k] === "string" && I18N[l][k].length > 0)));
+check("no raw ${p} placeholder leaked into strings", LANGS.every(l =>
+  !I18N[l].skipConfirm.includes("${") && !I18N[l].refuseConfirm.includes("${")));
+check("skipConfirm interpolates name+p($100)", sandbox.window.t("skipConfirm", {name:"Alex", p:"$100"}).includes("$100"));
+check("refuseConfirm interpolates type word",
+  sandbox.window.t("refuseConfirm", {name:"Alex", p:"$100", type:sandbox.window.t("dare")}).includes(sandbox.window.t("dare")));
+check("roomWatching interpolates code", sandbox.window.t("roomWatching", {code:"KISS"}).includes("KISS"));
+
+/* ---- 11. timer math (drift-proof) ---- */
+console.log("\n[timer math]");
+const cr = sandbox.window.computeRemaining;
+check("computeRemaining exists", typeof cr === "function");
+check("future deadline counts down", Math.abs(cr(Date.now() + 2000, Date.now()) - 2) < 0.001);
+check("past deadline clamps to zero", cr(Date.now() - 5000, Date.now()) === 0);
+check("one hour ahead = 3600s", Math.abs(cr(Date.now() + 3600000, Date.now()) - 3600) < 0.001);
+
+/* ---- 12. wake lock guards ---- */
+console.log("\n[wake lock]");
+check("requestWakeLock defined and safe without API", typeof sandbox.requestWakeLock === "function");
+check("releaseWakeLock defined", typeof sandbox.releaseWakeLock === "function");
+
+/* ---- 13. persistence keeps room session across reload ---- */
+console.log("\n[room session persistence]");
+S.roomCode = "KISS"; S.role = "guest"; S.mode = "room";
+sandbox.window.saveState();
+const saved2 = JSON.parse(localStorageStub.getItem("dirtytruth_save_v1"));
+check("saveState persists roomCode", saved2.roomCode === "KISS");
+check("saveState persists role", saved2.role === "guest");
+const loaded2 = sandbox.window.loadState();
+check("loadState restores roomCode", S.roomCode === "KISS" && loaded2 === true);
+check("loadState restores role", S.role === "guest");
+
+/* ---- 14. PWA manifest + icon shipped ---- */
+console.log("\n[pwa]");
+const manRaw = fs.readFileSync(path.join(__dirname, "static", "manifest.webmanifest"), "utf8");
+const man = JSON.parse(manRaw);
+check("manifest has start_url /", man.start_url === "/");
+check("manifest references icon.svg", Array.isArray(man.icons) && man.icons.some(i => String(i.src).endsWith("icon.svg")));
+check("icon.svg exists and is svg", fs.readFileSync(path.join(__dirname, "static", "icon.svg"), "utf8").includes("<svg"));
+check("index.html links manifest", html.includes('rel="manifest"'));
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

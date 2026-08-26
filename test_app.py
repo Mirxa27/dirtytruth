@@ -1,9 +1,10 @@
 """Integration tests for the Flask app — LLM and TTS mocked, everything else real."""
-import sys, os, json
+import sys, os, json, time
 sys.path.insert(0, os.path.dirname(__file__))
 
 import pytest
 import app as appmod
+import rooms
 from app import app
 
 
@@ -627,3 +628,114 @@ def test_chat_non_dict_json_body(client, monkeypatch):
     r = client.post("/api/chat", data='"just a string"', content_type="application/json")
     assert r.status_code == 200
     assert r.get_json()["reply"] == "ok"
+
+
+# ---------------------------------------------------------------------------
+# v5.1 — CSP header, rate limiting, join guard, event-seq race, secrets
+# loader, room pruning
+# ---------------------------------------------------------------------------
+def test_csp_header_present(client):
+    r = client.get("/api/health")
+    csp = r.headers.get("Content-Security-Policy", "")
+    assert "default-src 'self'" in csp
+    assert "frame-ancestors 'none'" in csp
+    assert "object-src 'none'" in csp
+
+
+def test_rate_limited_endpoints_return_429(client, monkeypatch):
+    monkeypatch.setattr(appmod, "RATE_LIMITS", {"/api/generate": 2})
+    appmod._rl_hits.clear()
+
+    def boom(payload, retries=3):  # force the offline-fallback path (still 200)
+        raise RuntimeError("llm down")
+    monkeypatch.setattr(appmod, "call_llm", boom)
+    try:
+        for _ in range(2):
+            r = client.post("/api/generate", json={"chosen": "truth", "players": [{"name": "A"}, {"name": "B"}]})
+            assert r.status_code == 200
+            assert r.get_json()["engine"] == "fallback"
+        r3 = client.post("/api/generate", json={"chosen": "truth"})
+        assert r3.status_code == 429
+        assert r3.get_json()["error"] == "rate limited"
+    finally:
+        appmod._rl_hits.clear()
+
+
+def test_rate_limit_forwarded_for_isolated_ips(client, monkeypatch):
+    monkeypatch.setattr(appmod, "RATE_LIMITS", {"/api/chat": 1})
+    appmod._rl_hits.clear()
+    try:
+        def boom(*a, **k):
+            raise RuntimeError("down")
+        monkeypatch.setattr(appmod, "call_llm", boom)
+        r1 = client.post("/api/chat", json={"message": "hi"})
+        r2 = client.post("/api/chat", json={"message": "hi"},
+                         environ_base={}, headers={"X-Forwarded-For": "203.0.113.9"})
+        assert r1.status_code == 200
+        # different IP bucket -> still served, not 429
+        assert r2.status_code == 200
+        r3 = client.post("/api/chat", json={"message": "hi"})
+        assert r3.status_code == 429
+    finally:
+        appmod._rl_hits.clear()
+
+
+def test_join_rejects_second_guest_but_allows_same_name_rejoin(client):
+    code = client.post("/api/room/create", json={"name": "Alex"}).get_json()["code"]
+    first = client.post("/api/room/join", json={"code": code, "name": "Sam"})
+    assert first.status_code == 200
+    hijack = client.post("/api/room/join", json={"code": code, "name": "Bob"})
+    assert hijack.status_code == 409
+    assert hijack.get_json()["error"] == "room full"
+    # page reload of the SAME guest rejoins idempotently
+    rejoin = client.post("/api/room/join", json={"code": code, "name": "Sam"})
+    assert rejoin.status_code == 200
+    assert rejoin.get_json()["state"]["players"][1]["name"] == "Sam"
+
+
+def test_join_unknown_shape_returns_404_not_500(client):
+    r = client.post("/api/room/join", json={"code": "ZZZZ", "name": "Sam"})
+    assert r.status_code == 404
+
+
+def test_event_seqs_are_unique_and_contiguous_under_concurrency():
+    import concurrent.futures as cf
+    code, _state = rooms.create_room("Alex", "male")
+    with cf.ThreadPoolExecutor(max_workers=8) as ex:
+        list(ex.map(lambda i: rooms.append_event(code, "act", {"i": i}), range(40)))
+    seqs = [e["seq"] for e in rooms.recent_events(code, 0, 100)]
+    assert len(seqs) == 40
+    assert sorted(seqs) == list(range(1, 41))
+
+
+def test_prune_rooms_drops_idle_rooms():
+    code, _state = rooms.create_room("Old", "male")
+    with rooms._lock:
+        c = rooms._conn()
+        c.execute("UPDATE rooms SET updated_at=? WHERE code=?", (time.time() - 8 * 24 * 3600, code))
+        c.commit()
+    assert rooms.get_room(code) is not None  # sanity before pruning
+    rooms.prune_rooms(max_age=7 * 24 * 3600)
+    assert rooms.get_room(code) is None
+
+
+def test_load_secrets_env_wins_over_file(tmp_path, monkeypatch):
+    f = tmp_path / "s.env"
+    f.write_text("DT_A=fromfile\nDT_B=fromfile\n# comment\n\nDT_C=\"quoted\"\n")
+    monkeypatch.setenv("DT_A", "fromenv")
+    appmod._load_secrets(str(f))
+    import os
+    assert os.environ["DT_A"] == "fromenv"
+    assert os.environ.pop("DT_B") == "fromfile"
+    assert os.environ.pop("DT_C") == "quoted"
+
+
+def test_pwa_assets_served(client):
+    r = client.get("/manifest.webmanifest")
+    assert r.status_code == 200
+    man = r.get_json()
+    assert man["start_url"] == "/"
+    assert any(i.get("src") == "/icon.svg" for i in man["icons"])
+    r2 = client.get("/icon.svg")
+    assert r2.status_code == 200
+    assert b"<svg" in r2.data

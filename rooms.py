@@ -125,13 +125,18 @@ def update_room(code, mutate):
 
 
 def append_event(code, etype, payload):
-    c = _conn()
-    seq = c.execute("SELECT COALESCE(MAX(seq),0)+1 FROM events WHERE room_code=?", (code,)).fetchone()[0]
-    c.execute(
-        "INSERT INTO events (room_code, seq, type, payload_json, ts) VALUES (?,?,?,?,?)",
-        (code, seq, etype, json.dumps(payload), time.time()),
-    )
-    c.commit()
+    # seq allocation and insert are atomic under _lock — two concurrent
+    # actions must never compute the same seq for a room.
+    with _lock:
+        c = _conn()
+        seq = c.execute(
+            "SELECT COALESCE(MAX(seq),0)+1 FROM events WHERE room_code=?", (code,)
+        ).fetchone()[0]
+        c.execute(
+            "INSERT INTO events (room_code, seq, type, payload_json, ts) VALUES (?,?,?,?,?)",
+            (code, seq, etype, json.dumps(payload), time.time()),
+        )
+        c.commit()
     return seq
 
 

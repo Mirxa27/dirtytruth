@@ -21,3 +21,6 @@ rooms.db-shm
 
 # Vercel
 .vercel/
+
+# Private runtime secrets
+secrets.env

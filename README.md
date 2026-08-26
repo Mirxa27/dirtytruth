@@ -24,17 +24,29 @@ A private, mobile-first slow-burn truth-or-dare game for couples, powered by the
 - **Multi-device rooms** — host creates a room, partner joins with a 4-letter code
   on their own device. Server-side SQLite room store; the partner's screen mirrors
   the challenge, timer, phase, and ledger via polling.
+- **Reload-proof room sessions** — refresh either phone mid-game and the session
+  resumes automatically from server state (host returns to the waiting screen if
+  the partner hasn't joined yet).
 - **Secret preferences** — each player can privately (optionally) tell Cassia their
   turn-ons, unsaid fantasy, and hard boundary. Cassia weaves them in; the partner
   never sees the form.
 - **Slow-burn heat (1–10)** — auto-escalates +1 each round; manual dial + chat control.
 - **Timed step-by-step challenges** — each dare is a sequence of timed, detailed
   instructions; each truth is a single answerable question.
+- **Drift-proof timers** — step countdowns are wall-clock based, so background-tab
+  throttling can never stretch or skip time.
+- **Screen stays awake** — Screen Wake Lock keeps phones on during play (auto
+  re-acquired when the tab becomes visible again).
+- **Installable (PWA-lite)** — web manifest + icon so players can add the game
+  to their home screen; standalone portrait display, dark theme color.
 - **Voice mode** — Cassia speaks challenges, steps, and "time's up" (Kokoro TTS).
 - **Timer alerts** — countdown bar, last-3s beeps, chime + flash + vibration on time-up, auto-advance.
 - **Cassia chat** — talk to the AI host to change heat or fire new challenges.
 - **Fun layer** — WebAudio SFX, confetti, Cassia banter, heat-drama toasts, haptics.
 - **Persistence** — game state survives reloads (localStorage); "New" resets.
+- **Hardened for a public URL** — per-IP rate limits on the LLM/TTS endpoints,
+  CSP + security headers, secrets kept out of source, guarded room joins
+  (no guest hijack), race-free event sequencing, hourly room pruning.
 
 ## Architecture
 - `app.py` — Flask app + Cassia AI engine (LLM + TTS plumbing, validation, fallbacks,
@@ -69,14 +81,27 @@ The app and tunnel are **decoupled** — restarting the app does not change the 
 vercel --prod
 ```
 Env vars (set in the Vercel dashboard or CLI):
-- `LLM_URL` / `LLM_KEY` / `LLM_MODEL` — OpenAI-compatible LLM endpoint (defaults baked in).
+- `LLM_URL` / `LLM_KEY` / `LLM_MODEL` — OpenAI-compatible LLM endpoint.
 - `TTS_URL` — public URL of the Kokoro TTS server (defaults to the local one;
   on Vercel point it at a public tunnel of the Kokoro server).
 
+### Secrets (never commit them)
+Secrets resolve in this order: real environment variables → gitignored
+`secrets.env` next to `app.py` → safe defaults. For the local box, keep them in
+`secrets.env`:
+```
+LLM_URL=...        # OpenAI-compatible chat completions URL
+LLM_KEY=...        # bearer token for the LLM endpoint
+LLM_MODEL=...      # model path
+TTS_URL=http://127.0.0.1:8880/v1/audio/speech
+```
+Rate limits per IP/minute are env-tunable too: `DT_RL_GENERATE`, `DT_RL_CHAT`,
+`DT_RL_TTS` (`0` disables; defaults 12 / 20 / 20).
+
 ## Tests
 ```bash
-.venv/bin/python -m pytest --cov=app --cov=game_logic --cov=languages --cov=rooms --cov-report=term   # 103 tests, ~96%
-node test_frontend.js                                                                                   # 48 tests
+.venv/bin/python -m pytest --cov=app --cov=game_logic --cov=languages --cov=rooms --cov-report=term   # 112 tests, ~94%
+node test_frontend.js                                                                                   # 67 tests
 ```
 LLM and TTS are mocked in tests; the live endpoints are verified against the real
 upstream services separately.

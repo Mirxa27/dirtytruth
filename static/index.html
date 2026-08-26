@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>🐴 Dirty Truth &amp; Dare 🔥</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍾</text></svg>">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon.svg">
+<meta name="theme-color" content="#0a0a0f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
   :root{
     --bg:#0a0a0f; --card:#14141f; --card2:#1c1c2b;
@@ -390,6 +396,11 @@ const I18N = {
     oathMsg:"Oath sealed, {names}. From this moment, every word and every dare is real. The game just got serious — spin when you're ready.",
     skipMsg:"{name} skips. That's a hundred dollar penalty.", refuseMsg:"{name} refuses. That's a hundred dollar penalty.",
     banter:["Mmm, you're doing so well…","The tension is *aching* now, isn't it?","Keep going. I can feel it building.","You two are getting dangerously close to the edge.","Slow down… or don't. Your call, darling."],
+    roomWatching:"Room {code} · playing together", roomGone:"That room is gone — let's start fresh.", resynced:"Reconnected to the game",
+    spinSpinning:"🍾 spinning…", craftTruth:"💋 Cassia is crafting your truth…", craftDare:"💋 Cassia is crafting your dare…",
+    netFail:"Take a deep breath and try again.",
+    skipConfirm:"{name} skips this step — that's a {p} penalty. Confirm?",
+    refuseConfirm:"{name} refuses to perform the {type} — that's a {p} penalty. Confirm?",
   },
   es: {
     rtl: false,
@@ -422,6 +433,11 @@ const I18N = {
     oathMsg:"Juramento sellado, {names}. Desde este momento, cada palabra y cada reto es real. El juego se puso serio — gira cuando estés listo.",
     skipMsg:"{name} salta. Eso es una penalización de cien dólares.", refuseMsg:"{name} se niega. Eso es una penalización de cien dólares.",
     banter:["Mmm, lo están haciendo muy bien…","La tensión *duele* ahora, ¿verdad?","Sigue. Puedo sentirlo crecer.","Ustedes dos están peligrosamente cerca del borde.","Lento… o no. Tú decides, cariño."],
+    roomWatching:"Sala {code} · jugando juntos", roomGone:"Esa sala ya no existe — empecemos de nuevo.", resynced:"Reconectado al juego",
+    spinSpinning:"🍾 girando…", craftTruth:"💋 Cassia está creando tu verdad…", craftDare:"💋 Cassia está creando tu reto…",
+    netFail:"Respira hondo y vuelve a intentarlo.",
+    skipConfirm:"{name} salta este paso — es una penalización de {p}. ¿Confirmar?",
+    refuseConfirm:"{name} se niega a hacer la {type} — es una penalización de {p}. ¿Confirmar?",
   },
   fr: {
     rtl: false,
@@ -454,6 +470,11 @@ const I18N = {
     oathMsg:"Serment scellé, {names}. Dès cet instant, chaque mot et chaque défi est réel. Le jeu est devenu sérieux — tournez quand vous êtes prêt.",
     skipMsg:"{name} passe. C'est une pénalité de cent dollars.", refuseMsg:"{name} refuse. C'est une pénalité de cent dollars.",
     banter:["Mmm, vous vous en sortez si bien…","La tension *fait mal* maintenant, n'est-ce pas ?","Continuez. Je sens que ça monte.","Vous deux êtes dangereusement proches du bord.","Doucement… ou non. À vous de voir, chéri."],
+    roomWatching:"Salle {code} · vous jouez ensemble", roomGone:"Cette salle n'existe plus — reprenons à zéro.", resynced:"Reconnecté au jeu",
+    spinSpinning:"🍾 ça tourne…", craftTruth:"💋 Cassia prépare ta vérité…", craftDare:"💋 Cassia prépare ton défi…",
+    netFail:"Respirez un bon coup et réessayez.",
+    skipConfirm:"{name} passe cette étape — c'est une pénalité de {p}. Confirmer ?",
+    refuseConfirm:"{name} refuse de faire le {type} — c'est une pénalité de {p}. Confirmer ?",
   },
   de: {
     rtl: false,
@@ -486,6 +507,11 @@ const I18N = {
     oathMsg:"Eid versiegelt, {names}. Ab diesem Moment ist jedes Wort und jede Mutprobe real. Das Spiel wurde ernst — drehe, wenn du bereit bist.",
     skipMsg:"{name} springt über. Das ist eine Strafe von hundert Dollar.", refuseMsg:"{name} verweigert. Das ist eine Strafe von hundert Dollar.",
     banter:["Mmm, ihr macht das so gut…","Die Spannung *tut weh* jetzt, oder?","Mach weiter. Ich spüre, wie es steigt.","Ihr zwei seid gefährlich nah am Rand.","Langsam… oder nicht. Du entscheidest, Schatz."],
+    roomWatching:"Raum {code} · ihr spielt zusammen", roomGone:"Dieser Raum ist weg — fangen wir neu an.", resynced:"Mit dem Spiel verbunden",
+    spinSpinning:"🍾 dreht sich…", craftTruth:"💋 Cassia stellt deine Wahrheit zusammen…", craftDare:"💋 Cassia stellt deine Mutprobe zusammen…",
+    netFail:"Atme tief durch und versuch es noch einmal.",
+    skipConfirm:"{name} überspringt diesen Schritt — das kostet {p} Strafe. Bestätigen?",
+    refuseConfirm:"{name} verweigert die {type} — das kostet {p} Strafe. Bestätigen?",
   },
   it: {
     rtl: false,
@@ -518,6 +544,11 @@ const I18N = {
     oathMsg:"Giuramento sigillato, {names}. Da questo momento, ogni parola e ogni sfida è reale. Il gioco è diventato serio — gira quando sei pronto.",
     skipMsg:"{name} salta. È una penalità di cento dollari.", refuseMsg:"{name} rifiuta. È una penalità di cento dollari.",
     banter:["Mmm, ci state andando così bene…","La tensione *fa male* adesso, vero?","Continua. Lo sento crescere.","Voi due siete pericolosamente vicini al bordo.","Piano… o no. Tu decidi, tesoro."],
+    roomWatching:"Stanza {code} · giocate insieme", roomGone:"Quella stanza non esiste più — ricominciamo.", resynced:"Riconnesso al gioco",
+    spinSpinning:"🍾 sta girando…", craftTruth:"💋 Cassia sta creando la tua verità…", craftDare:"💋 Cassia sta creando la tua sfida…",
+    netFail:"Fai un respiro profondo e riprova.",
+    skipConfirm:"{name} salta questo passo — è una penalità di {p}. Confermi?",
+    refuseConfirm:"{name} rifiuta di fare la {type} — è una penalità di {p}. Confermi?",
   },
   pt: {
     rtl: false,
@@ -550,6 +581,11 @@ const I18N = {
     oathMsg:"Juramento selado, {names}. A partir deste momento, cada palavra e cada desafio é real. O jogo ficou sério — gire quando estiver pronto.",
     skipMsg:"{name} pula. Isso é uma penalidade de cem dólares.", refuseMsg:"{name} recusa. Isso é uma penalidade de cem dólares.",
     banter:["Mmm, vocês estão indo tão bem…","A tensão *dói* agora, não?","Continue. Eu sinto crescer.","Vocês dois estão perigosamente perto da beira.","Devagar… ou não. Você decide, querido."],
+    roomWatching:"Sala {code} · jogando juntos", roomGone:"Essa sala acabou — vamos começar de novo.", resynced:"Reconectado ao jogo",
+    spinSpinning:"🍾 girando…", craftTruth:"💋 Cassia está criando sua verdade…", craftDare:"💋 Cassia está criando seu desafio…",
+    netFail:"Respire fundo e tente de novo.",
+    skipConfirm:"{name} pula este passo — é uma penalidade de {p}. Confirmar?",
+    refuseConfirm:"{name} recusa fazer o {type} — é uma penalidade de {p}. Confirmar?",
   },
   hi: {
     rtl: false,
@@ -582,6 +618,11 @@ const I18N = {
     oathMsg:"शपथ सील, {names}। इस क्षण से, हर शब्द और हर चुनौती वास्तविक है। खेल गंभीर हो गया — तैयार होने पर घुमाएँ।",
     skipMsg:"{name} छोड़ता है। यह सौ डॉलर का जुर्माना है।", refuseMsg:"{name} मना करता है। यह सौ डॉलर का जुर्माना है।",
     banter:["मम्, आप बहुत अच्छा कर रहे हैं…","तनाव अब *दर्द* दे रहा है, है ना?","आगे बढ़ें। मुझे लग रहा है कि यह बढ़ रहा है।","आप दोनों किनारे के खतरनाक करीब हैं।","धीरे… या नहीं। आप तय करें, प्रिय।"],
+    roomWatching:"रूम {code} · साथ खेल रहे हैं", roomGone:"वह रूम अब नहीं है — नया शुरू करें।", resynced:"खेल से फिर जुड़े",
+    spinSpinning:"🍾 घूम रही है…", craftTruth:"💋 कैसिया आपका सच बना रही है…", craftDare:"💋 कैसिया आपकी चुनौती बना रही है…",
+    netFail:"गहरी सांस लें और फिर कोशिश करें।",
+    skipConfirm:"{name} यह चरण छोड़ता है — {p} जुर्माना है। पुष्टि करें?",
+    refuseConfirm:"{name} {type} करने से मना करता है — {p} जुर्माना है। पुष्टि करें?",
   },
   ja: {
     rtl: false,
@@ -614,6 +655,11 @@ const I18N = {
     oathMsg:"誓いを封印、{names}。この瞬間から、すべての言葉と挑戦が本物です。ゲームが本気になりました — 準備ができたら回してください。",
     skipMsg:"{name}がスキップ。百ドルの罰金です。", refuseMsg:"{name}が拒否。百ドルの罰金です。",
     banter:["mmm、とても上手です…","緊張が今*痛い*ですよね？","続けて。高まるのを感じます。","あなたたちは限界に危険なくらい近づいています。","ゆっくり…でもなくてもいい。あなたが決めなさい、愛しい人。"],
+    roomWatching:"ルーム {code} · 二人でプレイ中", roomGone:"そのルームはもうありません — 新しく始めましょう。", resynced:"ゲームに再接続しました",
+    spinSpinning:"🍾 回転中…", craftTruth:"💋 カシアがあなたの真実を作っています…", craftDare:"💋 カシアがあなたの挑戦を作っています…",
+    netFail:"深呼吸して、もう一度試してください。",
+    skipConfirm:"{name}がこのステップをスキップ — {p}の罰金です。よろしいですか？",
+    refuseConfirm:"{name}が{type}を拒否 — {p}の罰金です。よろしいですか？",
   },
   zh: {
     rtl: false,
@@ -646,6 +692,11 @@ const I18N = {
     oathMsg:"誓言封印，{names}。从这一刻起，每个词和每个胆量都是真实的。游戏变得认真了——准备好就转动。",
     skipMsg:"{name}跳过了。这是100美元的罚款。", refuseMsg:"{name}拒绝了。这是100美元的罚款。",
     banter:["嗯，你们做得很好…","现在张力*让人难受*，对吧？","继续。我能感觉到它在升温。","你们两个危险地接近边缘。","慢一点…或者不。你决定，亲爱的。"],
+    roomWatching:"房间 {code} · 一起游戏中", roomGone:"那个房间已不存在——重新开始吧。", resynced:"已重新连接到游戏",
+    spinSpinning:"🍾 旋转中…", craftTruth:"💋 Cassia 正在为你构思真相…", craftDare:"💋 Cassia 正在为你构思胆量…",
+    netFail:"深呼吸，然后再试一次。",
+    skipConfirm:"{name} 跳过此步骤——将罚款 {p}。确认吗？",
+    refuseConfirm:"{name} 拒绝执行{type}——将罚款 {p}。确认吗？",
   },
   ar: {
     rtl: true,
@@ -678,6 +729,11 @@ const I18N = {
     oathMsg:"خُتم القسم، {names}. من هذه اللحظة، كل كلمة وكل تحدٍّ حقيقي. اللعبة أصبحت جدّية — أدر عندما تكون جاهزاً.",
     skipMsg:"{name} يتخطّى. هذه غرامة مئة دولار.", refuseMsg:"{name} يرفض. هذه غرامة مئة دولار.",
     banter:["مم، أنتما تفعلان ذلك بشكل جميل…","التوتر *يؤلم* الآن، أليس كذلك؟","واصل. أشعر أنه يتصاعد.","أنتما قريبان بشكل خطير من الحافة.","ببطء… أو لا. أنت تقرر، يا حبيبي."],
+    roomWatching:"غرفة {code} · تلعبان معاً", roomGone:"تلك الغرفة لم تعد موجودة — لنبدأ من جديد.", resynced:"تمت إعادة الاتصال باللعبة",
+    spinSpinning:"🍾 تدور…", craftTruth:"💋 كاسيا تعدّ لك حقيقة…", craftDare:"💋 كاسيا تعدّ لك تحدّياً…",
+    netFail:"خذ نفساً عميقاً وحاول مجدداً.",
+    skipConfirm:"{name} يتخطى هذه الخطوة — غرامة {p}. هل تؤكدان؟",
+    refuseConfirm:"{name} يرفض تنفيذ {type} — غرامة {p}. هل تؤكدان؟",
   },
 };
 
@@ -766,6 +822,27 @@ const SFX = {
   riser(){ beep(300,0.3,"sawtooth",0.1); setTimeout(()=>beep(450,0.3,"sawtooth",0.1),150); setTimeout(()=>beep(600,0.4,"sawtooth",0.12),300); },
 };
 function buzz(ms=80){ if(navigator.vibrate) navigator.vibrate(ms); }
+
+/* =========================================================================
+   Screen Wake Lock — keep the phone awake during play (1–2h sessions)
+   ========================================================================= */
+let wakeLock = null;
+async function requestWakeLock(){
+  try{
+    if("wakeLock" in navigator && !wakeLock){
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => { wakeLock = null; });
+    }
+  }catch(e){}
+}
+function releaseWakeLock(){
+  try{ if(wakeLock) wakeLock.release(); }catch(e){}
+  wakeLock = null;
+}
+document.addEventListener("visibilitychange", () => {
+  // Chrome drops the lock when the tab hides; re-acquire when we come back
+  if(document.visibilityState === "visible" && !$("#gameUI").classList.contains("hidden")) requestWakeLock();
+});
 
 /* =========================================================================
    Confetti
@@ -925,7 +1002,7 @@ function saveState(){
       truthStreak: state.truthStreak, recent: state.recent,
       voice: state.voice, autoEscalate: state.autoEscalate,
       oathSworn: state.oathSworn, ledger: state.ledger, prefs: state.prefs,
-      mode: state.mode,
+      mode: state.mode, roomCode: state.roomCode, role: state.role,
     }));
   }catch(e){}
 }
@@ -936,9 +1013,11 @@ function loadState(){
     if(!s.players || s.players.length < 2) return false;
     state.players = s.players; state.heat = s.heat||2; state.round = s.round||1;
     state.truthStreak = s.truthStreak||{}; state.recent = s.recent||[];
-    state.voice = !!s.voice; state.autoEscalate = s.autoEscalate !== false;
+    state.voice = s.voice !== false; state.autoEscalate = s.autoEscalate !== false;
     state.oathSworn = !!s.oathSworn; state.ledger = s.ledger||{}; state.prefs = s.prefs||{};
     state.mode = s.mode || "solo";
+    state.roomCode = s.roomCode || null;
+    state.role = s.role || null;
     return true;
   }catch(e){ return false; }
 }
@@ -1032,6 +1111,7 @@ $("#startBtn").addEventListener("click", async () => {
     if(isHost){
       const d = await api("/api/room/create", {name: p1.name, gender: p1.gender, lang: uiLang});
       state.roomCode = d.code; state.role = "host"; state.roomVersion = 0;
+      saveState();
       $("#roomCodeDisplay").textContent = d.code;
       $("#setupCard").classList.add("hidden");
       $("#roomWaitCard").classList.remove("hidden");
@@ -1039,13 +1119,15 @@ $("#startBtn").addEventListener("click", async () => {
     } else {
       const code = $("#joinCode").value.trim().toUpperCase();
       const d = await api("/api/room/join", {code, name: p2.name, gender: p2.gender});
-      if(d.error){ toast("Room not found"); return; }
+      if(d.error){ toast(d.error === "room full" ? t("roomGone") : "Room not found"); return; }
       state.roomCode = code; state.role = "guest"; state.roomVersion = d.version;
       applyRemoteState(d.state);
+      saveState();
       $("#setupCard").classList.add("hidden");
       $("#gameUI").classList.remove("hidden");
       $("#roomGameCard").classList.remove("hidden");
-      $("#roomGameText").textContent = `Room ${code} · watching`;
+      $("#roomGameText").textContent = t("roomWatching", {code});
+      requestWakeLock();
       startRoomPolling();
       addChat("cassia", t("welcome").replace("{a}", p1.name).replace("{b}", p2.name));
     }
@@ -1074,6 +1156,7 @@ $("#cancelRoomBtn").addEventListener("click", () => {
 function spin(){
   if(state.spinning) return;
   state.spinning = true;
+  requestWakeLock();
   $("#spinBtn").disabled = true;
   $("#challengeCard").classList.add("hidden");
   $("#timerCard").classList.add("hidden");
@@ -1082,7 +1165,7 @@ function spin(){
   $("#oathCard").classList.add("hidden");
   stopTimer();
   renderStreaks(); renderLedger();
-  $("#spinStatus").textContent = "🍾 " + (state.role==="guest" ? "…" : "spinning…");
+  $("#spinStatus").textContent = "🍾 " + (state.role==="guest" ? "…" : t("spinSpinning").replace("🍾 ",""));
   SFX.spin();
   const bottle = $("#bottle");
   let angle = 0;
@@ -1153,7 +1236,7 @@ $("#dareBtn").addEventListener("click", () => pickType("dare"));
    Generate challenge
    ========================================================================= */
 async function generateChallenge(chosen){
-  $("#spinStatus").textContent = "💋 Cassia is crafting your " + (chosen==="truth"?"truth":"dare") + "…";
+  $("#spinStatus").textContent = chosen === "truth" ? t("craftTruth") : t("craftDare");
   const body = {
     players: state.players, chosen, target: state.target.name,
     heat: state.heat, round: state.round, recent: state.recent,
@@ -1163,7 +1246,7 @@ async function generateChallenge(chosen){
   try{
     d = await api("/api/generate", body);
   }catch(e){
-    d = {type: chosen, title: "…", steps: [{instruction: "Take a deep breath and try again.", seconds: 10}], engine: "error"};
+    d = {type: chosen, title: "…", steps: [{instruction: t("netFail"), seconds: 10}], engine: "error"};
   }
   state.challenge = d;
   state.stepIdx = 0;
@@ -1197,9 +1280,15 @@ function renderChallenge(){
 }
 
 /* =========================================================================
-   Timer
+   Timer — wall-clock based so background-tab throttling never skews it
    ========================================================================= */
 let timerInt = null, timerRemaining = 0, timerTotal = 0, timerPaused = false;
+let timerEndAt = 0, timerFrozenRemain = 0;
+function computeRemaining(endAt, now){
+  // pure helper (exposed for tests): seconds left on a deadline
+  return Math.max(0, ((endAt - now) / 1000));
+}
+window.computeRemaining = computeRemaining;
 function startStep(idx){
   const c = state.challenge; if(!c) return;
   state.stepIdx = idx;
@@ -1217,6 +1306,7 @@ function startStep(idx){
   $("#nextBtn").disabled = true;
   $("#pauseBtn").textContent = "⏸ " + t("pause");
   timerTotal = step.seconds; timerRemaining = step.seconds; timerPaused = false;
+  timerEndAt = Date.now() + step.seconds * 1000;
   updateTimerDisplay();
   if(state.roomCode) roomAction("set_step", {step: idx});
   clearInterval(timerInt);
@@ -1225,7 +1315,7 @@ function startStep(idx){
 }
 function tick(){
   if(timerPaused) return;
-  timerRemaining -= 0.2;
+  timerRemaining = computeRemaining(timerEndAt, Date.now());
   if(timerRemaining <= 3 && timerRemaining > 0 && Math.abs(timerRemaining - Math.round(timerRemaining)) < 0.2) SFX.tick();
   if(timerRemaining <= 0){
     timerRemaining = 0;
@@ -1328,12 +1418,20 @@ $("#beginBtn").addEventListener("click", () => {
   setTimeout(()=>$("#beginBtn").disabled = false, 500);
 });
 $("#pauseBtn").addEventListener("click", () => {
-  timerPaused = !timerPaused;
+  if(!timerPaused){
+    timerPaused = true;
+    timerFrozenRemain = computeRemaining(timerEndAt, Date.now());
+    timerRemaining = timerFrozenRemain;
+    updateTimerDisplay();
+  } else {
+    timerPaused = false;
+    timerEndAt = Date.now() + timerFrozenRemain * 1000;
+  }
   $("#pauseBtn").textContent = timerPaused ? "▶ " + t("begin") : "⏸ " + t("pause");
 });
 $("#skipBtn").addEventListener("click", () => {
   const c = state.challenge; if(!c) return;
-  if(confirm(`${state.target.name} skips this step — that's a $${PENALTY} penalty. Confirm?`)){
+  if(confirm(t("skipConfirm", {name: state.target.name, p: "$" + PENALTY}))){
     recordPenalty(state.target.name, `skipped a ${c.type} step`);
     SFX.chaChing();
     toast(`💸 ${state.target.name} owes $${PENALTY}`);
@@ -1343,7 +1441,7 @@ $("#skipBtn").addEventListener("click", () => {
 });
 $("#notDoneBtn").addEventListener("click", () => {
   const c = state.challenge; if(!c) return;
-  if(confirm(`${state.target.name} refuses to perform the ${c.type} — that's a $${PENALTY} penalty. Confirm?`)){
+  if(confirm(t("refuseConfirm", {name: state.target.name, p: "$" + PENALTY, type: c.type === "truth" ? t("truth") : t("dare")}))){
     recordPenalty(state.target.name, `refused a ${c.type}`);
     SFX.chaChing();
     toast(`💸 ${state.target.name} owes $${PENALTY}`);
@@ -1375,7 +1473,7 @@ $("#newGameBtn").addEventListener("click", () => {
   state.truthStreak = {}; state.recent = []; state.spinning = false; state.forcedDare = false;
   state.oathSworn = false; state.ledger = {}; state.prefs = {};
   state.roomCode = null; state.role = null; state.guestJoined = false;
-  stopRoomPolling(); stopTimer();
+  stopRoomPolling(); stopTimer(); releaseWakeLock();
   localStorage.removeItem(SAVE_KEY);
   $("#gameUI").classList.add("hidden");
   $("#roomWaitCard").classList.add("hidden");
@@ -1488,17 +1586,65 @@ window.applyLang = applyLang;
 
 buildLangSelect();
 applyLang();
-(function resume(){
-  if(!loadState()) return;
-  if(state.mode === "room" && !state.roomCode) return; // room state is server-side
+async function enterGameUI(resumeRoomText){
   $("#setupCard").classList.add("hidden");
   $("#gameUI").classList.remove("hidden");
+  if(resumeRoomText){ $("#roomGameCard").classList.remove("hidden"); $("#roomGameText").textContent = resumeRoomText; }
   $("#roundNum").textContent = state.round;
   $("#heatRange").value = state.heat;
   updateHeatLabel(); renderPhase(); renderStreaks(); renderLedger();
   $("#voiceToggle").classList.toggle("on", state.voice);
   $("#escalateToggle").classList.toggle("on", state.autoEscalate);
   addChat("cassia", t("welcome").replace("{a}", state.players[0].name).replace("{b}", state.players[1].name));
+}
+function dropRoomSession(){
+  // server-side room expired or was never found — fall back to setup
+  state.mode = "solo"; state.roomCode = null; state.role = null; state.guestJoined = false;
+  stopRoomPolling(); saveState();
+  toast(t("roomGone"));
+}
+async function resumeRoomSession(){
+  const code = state.roomCode, role = state.role;
+  try{
+    if(role === "host"){
+      const d = await api(`/api/room/state?code=${code}`, null, "GET");
+      if(d.error || !d.state){ return dropRoomSession(); }
+      state.roomVersion = d.version;
+      applyRemoteState(d.state);
+      if(d.state.players && d.state.players[1] && d.state.players[1].joined){
+        await enterGameUI(t("joined"));
+      } else {
+        // partner not here yet — back to the waiting screen
+        state.roomVersion = d.version;
+        $("#setupCard").classList.add("hidden");
+        $("#roomWaitCard").classList.remove("hidden");
+        $("#roomCodeDisplay").textContent = code;
+        startRoomPolling();
+        return; // no welcome spam twice
+      }
+    } else {
+      const myName = (state.players[1] && state.players[1].name) || state.players[0].name;
+      const myGender = (state.players[1] && state.players[1].gender) || "";
+      const j = await api("/api/room/join", {code, name: myName, gender: myGender});
+      if(j.error){ return dropRoomSession(); }
+      state.role = "guest"; state.roomVersion = j.version;
+      applyRemoteState(j.state);
+      await enterGameUI(t("roomWatching", {code}));
+    }
+    requestWakeLock();
+    addChat("cassia", t("resynced") + " ✓");
+    startRoomPolling();
+  }catch(e){
+    return dropRoomSession();
+  }
+}
+(async function resume(){
+  if(!loadState()) return;
+  if(state.mode === "room"){
+    if(state.roomCode && state.role) { await resumeRoomSession(); }
+    return; // without a code there is nothing server-side to resume
+  }
+  await enterGameUI(null);
 })();
 </script>
 </body>

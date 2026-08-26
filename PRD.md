@@ -1,9 +1,9 @@
 # 🐴 Dirty Truth & Dare 🔥 — Product Requirements Document (PRD)
 
-**Version:** 5.0
+**Version:** 5.1
 **Owner:** Mirxa
 **Engine:** Cassia AI (local LLM on L40S)
-**Status:** In development → production
+**Status:** Production
 
 ---
 
@@ -213,7 +213,12 @@ Setup (names, genders, heat, language, secret preferences)
 - **v4** — dirty-secrets truth engine, mystery phases, oath, $100 ledger,
   production hardening, systemd supervision, 199 tests. ✅
 - **v5** — multi-device rooms, 10-language i18n, secret preferences,
-  fun/excitement layer, GitHub + Vercel deploy. ← **this release**
+  fun/excitement layer, GitHub + Vercel deploy. ✅
+- **v5.1** — reload-proof room sessions, drift-proof timers, screen wake lock,
+  PWA-lite install, secrets out of source (`secrets.env`), per-IP rate limiting
+  on LLM/TTS endpoints, CSP, guarded joins (no guest hijack), race-free event
+  sequencing, hourly room pruning, full i18n of remaining strings.
+  ← **this release**
 
 ## 13. Success metrics
 
