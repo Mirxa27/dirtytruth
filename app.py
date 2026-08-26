@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Dirty Truth & Dare — Flask backend with Cassia AI engine (v5, production)."""
+"""Dirty Truth & Dare — Flask backend with Cassia AI engine (v5.2, production)."""
 import json
 import os
 import re
@@ -61,9 +61,14 @@ TTS_VOICE = os.environ.get("TTS_VOICE", "af_heart")
 # expensive LLM/TTS proxy endpoints on a public URL.
 # ---------------------------------------------------------------------------
 RATE_LIMITS = {
-    "/api/generate": int(os.environ.get("DT_RL_GENERATE", "12") or 0),  # per minute
+    "/api/generate": int(os.environ.get("DT_RL_GENERATE", "12") or 0),   # per minute
     "/api/chat": int(os.environ.get("DT_RL_CHAT", "20") or 0),
     "/api/tts": int(os.environ.get("DT_RL_TTS", "20") or 0),
+    # Room codes are only 4 chars (~1M combos) — keep join tight vs brute force.
+    "/api/room/create": int(os.environ.get("DT_RL_ROOM_CREATE", "10") or 0),
+    "/api/room/join": int(os.environ.get("DT_RL_ROOM_JOIN", "30") or 0),
+    "/api/room/action": int(os.environ.get("DT_RL_ROOM_ACTION", "240") or 0),
+    "/api/room/prefs": int(os.environ.get("DT_RL_ROOM_PREFS", "60") or 0),
 }
 _rl_hits = {}
 _rl_lock = threading.Lock()
@@ -91,6 +96,11 @@ def _rate_limited(path):
             for k in [k2 for k2, v in hits.items() if not v or max(v) < window_start]:
                 hits.pop(k, None)
     return False
+
+
+def _too_many():
+    """429 response with a Retry-After hint matching the sliding window."""
+    return jsonify({"error": "rate limited"}), 429, {"Retry-After": "60"}
 
 app = Flask(__name__, static_folder="static", static_url_path="")
 app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024  # 1 MB request cap
@@ -296,7 +306,7 @@ def health():
 @app.route("/api/tts", methods=["POST"])
 def tts():
     if _rate_limited("/api/tts"):
-        return jsonify({"error": "rate limited"}), 429
+        return _too_many()
     data = request.get_json(force=True, silent=True) or {}
     text = str(data.get("text", ""))[:1200]
     if not text.strip():
@@ -407,7 +417,7 @@ def _translate_challenge(title, steps, lang_code):
 @app.route("/api/generate", methods=["POST"])
 def generate():
     if _rate_limited("/api/generate"):
-        return jsonify({"error": "rate limited"}), 429
+        return _too_many()
     data = request.get_json(force=True, silent=True)
     if not isinstance(data, dict):
         data = {}
@@ -483,7 +493,7 @@ def generate():
 @app.route("/api/chat", methods=["POST"])
 def chat():
     if _rate_limited("/api/chat"):
-        return jsonify({"error": "rate limited"}), 429
+        return _too_many()
     data = request.get_json(force=True, silent=True)
     if not isinstance(data, dict):
         data = {}
@@ -596,6 +606,8 @@ def penalty():
 # ---------------------------------------------------------------------------
 @app.route("/api/room/create", methods=["POST"])
 def room_create():
+    if _rate_limited("/api/room/create"):
+        return _too_many()
     data = request.get_json(force=True, silent=True) or {}
     name = str(data.get("name", "Player"))[:30].strip() or "Player"
     gender = str(data.get("gender", "partner"))[:20].strip() or "partner"
@@ -607,6 +619,8 @@ def room_create():
 
 @app.route("/api/room/join", methods=["POST"])
 def room_join():
+    if _rate_limited("/api/room/join"):
+        return _too_many()
     data = request.get_json(force=True, silent=True) or {}
     code = str(data.get("code", "")).upper().strip()
     name = str(data.get("name", "Player"))[:30].strip() or "Player"
@@ -652,6 +666,8 @@ def room_state():
 @app.route("/api/room/action", methods=["POST"])
 def room_action():
     """Host/guest action. Body: {code, action, ...payload}."""
+    if _rate_limited("/api/room/action"):
+        return _too_many()
     data = request.get_json(force=True, silent=True) or {}
     code = str(data.get("code", "")).upper().strip()
     action = str(data.get("action", ""))[:30]
@@ -728,6 +744,8 @@ def room_action():
 @app.route("/api/room/prefs", methods=["POST"])
 def room_prefs():
     """Save secret preferences for a player (private — never shown to the partner)."""
+    if _rate_limited("/api/room/prefs"):
+        return _too_many()
     data = request.get_json(force=True, silent=True) or {}
     code = str(data.get("code", "")).upper().strip()
     player = str(data.get("player", ""))[:30].strip()

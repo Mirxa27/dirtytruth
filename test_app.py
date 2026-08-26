@@ -739,3 +739,41 @@ def test_pwa_assets_served(client):
     r2 = client.get("/icon.svg")
     assert r2.status_code == 200
     assert b"<svg" in r2.data
+
+
+def test_429_includes_retry_after(client, monkeypatch):
+    monkeypatch.setattr(appmod, "RATE_LIMITS", {"/api/generate": 1})
+    appmod._rl_hits.clear()
+
+    def boom(payload, retries=3):
+        raise RuntimeError("llm down")
+    monkeypatch.setattr(appmod, "call_llm", boom)
+    try:
+        assert client.post("/api/generate", json={"chosen": "truth"}).status_code == 200
+        r = client.post("/api/generate", json={"chosen": "truth"})
+        assert r.status_code == 429
+        assert r.headers.get("Retry-After") == "60"
+    finally:
+        appmod._rl_hits.clear()
+
+
+def test_room_join_brute_force_capped(client, monkeypatch):
+    monkeypatch.setattr(appmod, "RATE_LIMITS", {"/api/room/join": 3})
+    appmod._rl_hits.clear()
+    try:
+        codes = [client.post("/api/room/create", json={"name": f"H{i}"}).get_json()["code"]
+                 for i in range(3)]
+        for c in codes:  # 3 legitimate joins burn the window
+            assert client.post("/api/room/join", json={"code": c, "name": "P"}).status_code == 200
+        r = client.post("/api/room/join", json={"code": codes[0], "name": "P"})
+        assert r.status_code == 429
+        assert r.headers.get("Retry-After") == "60"
+    finally:
+        appmod._rl_hits.clear()
+
+
+def test_room_state_unknown_code_is_404():
+    # server contract the frontend challenge-signature mirroring relies on
+    r = app.test_client().get("/api/room/state", query_string={"code": "NOPE"})
+    assert r.status_code == 404
+    assert r.get_json()["error"] == "room not found"

@@ -7,6 +7,6 @@ os.environ["DIRTYTRUTH_DB"] = os.path.join(tempfile.mkdtemp(prefix="dt_test_"), 
 
 # Tests exercise endpoint behavior directly; keep the per-IP rate limiter off
 # (dedicated tests flip it back on locally).
-os.environ["DT_RL_GENERATE"] = "0"
-os.environ["DT_RL_CHAT"] = "0"
-os.environ["DT_RL_TTS"] = "0"
+for _k in ("GENERATE", "CHAT", "TTS", "ROOM_CREATE", "ROOM_JOIN",
+           "ROOM_ACTION", "ROOM_PREFS"):
+    os.environ["DT_RL_" + _k] = "0"

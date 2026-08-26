@@ -218,6 +218,11 @@ Setup (names, genders, heat, language, secret preferences)
   PWA-lite install, secrets out of source (`secrets.env`), per-IP rate limiting
   on LLM/TTS endpoints, CSP, guarded joins (no guest hijack), race-free event
   sequencing, hourly room pruning, full i18n of remaining strings.
+- **v5.2** — two-way room sync: partner screen mirrors each timed step and its
+  countdown live, guest penalties reach the host instantly, oath mirrors without
+  echo loops; Cassia chat fires real challenges and heat changes broadcast;
+  rate limits extended to the room API (anti-brute-force join caps, Retry-After);
+  visibility-aware polling with error backoff + reconnecting indicator.
   ← **this release**
 
 ## 13. Success metrics

@@ -24,6 +24,12 @@ A private, mobile-first slow-burn truth-or-dare game for couples, powered by the
 - **Multi-device rooms** — host creates a room, partner joins with a 4-letter code
   on their own device. Server-side SQLite room store; the partner's screen mirrors
   the challenge, timer, phase, and ledger via polling.
+- **True two-way sync (v5.2)** — the partner's screen mirrors each timed step and
+  its countdown live (PRD §4 timer promise), guest-recorded penalties land on the
+  host's screen on the next poll, the oath appears mirrored without echo loops,
+  and a connection glitch shows a "reconnecting" state until re-synced.
+- **Chat-driven challenges (v5.2)** — ask Cassia in chat ("give me a dare") and she
+  fires a real generated challenge; heat changes from chat broadcast to both devices.
 - **Reload-proof room sessions** — refresh either phone mid-game and the session
   resumes automatically from server state (host returns to the waiting screen if
   the partner hasn't joined yet).
@@ -44,7 +50,8 @@ A private, mobile-first slow-burn truth-or-dare game for couples, powered by the
 - **Cassia chat** — talk to the AI host to change heat or fire new challenges.
 - **Fun layer** — WebAudio SFX, confetti, Cassia banter, heat-drama toasts, haptics.
 - **Persistence** — game state survives reloads (localStorage); "New" resets.
-- **Hardened for a public URL** — per-IP rate limits on the LLM/TTS endpoints,
+- **Hardened for a public URL** — per-IP rate limits on the LLM/TTS endpoints *and*
+  the room API (tight on join to blunt code brute-forcing, `Retry-After` on 429s),
   CSP + security headers, secrets kept out of source, guarded room joins
   (no guest hijack), race-free event sequencing, hourly room pruning.
 
@@ -100,11 +107,12 @@ Rate limits per IP/minute are env-tunable too: `DT_RL_GENERATE`, `DT_RL_CHAT`,
 
 ## Tests
 ```bash
-.venv/bin/python -m pytest --cov=app --cov=game_logic --cov=languages --cov=rooms --cov-report=term   # 112 tests, ~94%
-node test_frontend.js                                                                                   # 67 tests
+.venv/bin/python -m pytest --cov=app --cov=game_logic --cov=languages --cov=rooms --cov-report=term   # 115 tests, ~93%
+node test_frontend.js                                                                                   # 80 tests
 ```
 LLM and TTS are mocked in tests; the live endpoints are verified against the real
-upstream services separately.
+upstream services separately. Rate limits are disabled in the test suite
+(`conftest.py`) and covered by dedicated tests that re-enable them locally.
 
 ## Upstream dependencies (must be running)
 - LLM: OpenAI-compatible endpoint (Qwen3.8) — see `LLM_URL` in `app.py`.

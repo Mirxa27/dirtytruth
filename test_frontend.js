@@ -78,6 +78,7 @@ const sandbox = {
 };
 sandbox.window = sandbox;
 sandbox.globalThis = sandbox;
+sandbox.__netCalls = [];
 vm.createContext(sandbox);
 
 try {
@@ -233,6 +234,54 @@ check("manifest has start_url /", man.start_url === "/");
 check("manifest references icon.svg", Array.isArray(man.icons) && man.icons.some(i => String(i.src).endsWith("icon.svg")));
 check("icon.svg exists and is svg", fs.readFileSync(path.join(__dirname, "static", "icon.svg"), "utf8").includes("<svg"));
 check("index.html links manifest", html.includes('rel="manifest"'));
+
+/* ---- 15. room mirror (v5.2): guests see challenges, steps, round ends ---- */
+console.log("\n[room mirror]");
+sandbox.fetch = async (url) => {
+  sandbox.__netCalls.push(String(url));
+  return { ok: true, json: async () => ({}), blob: async () => new Blob() };
+};
+S.role = "guest"; S.roomCode = "KISS";
+S.players = [{ name: "H", gender: "male" }, { name: "G", gender: "female", joined: true }];
+S.oathSworn = false;
+const dareChal = { type: "dare", title: "The Slow Gaze", steps: [{ instruction: "Look.", seconds: 30 }, { instruction: "Breathe.", seconds: 20 }] };
+function feedState(over) {
+  return Object.assign({
+    heat: 2, round: 1, target: { name: "G" }, challenge: dareChal, stepIdx: 0,
+    status: "playing", players: S.players, truthStreak: {}, ledger: {},
+    oathSworn: false, recent: [], prefs: {}, lang: "en",
+  }, over);
+}
+sandbox.applyRemoteState(feedState({}));
+check("mirror renders fresh challenge", els["qTitle"].textContent === "The Slow Gaze");
+check("mirror signature tracked", sandbox.__MIRROR.renderedSig.length > 0);
+check("mirrored dare badge set", els["qType"].textContent.includes("DARE"));
+check("no state broadcast from a pure mirror", !sandbox.__netCalls.some(u => u.includes("/api/room/action")));
+
+sandbox.applyRemoteState(feedState({ stepIdx: 1 }));
+check("step advance mirrored into timer", !els["timerCard"].classList.contains("hidden"));
+check("appliedStep advanced to 1", sandbox.__MIRROR.appliedStep === 1);
+
+sandbox.applyRemoteState(feedState({ challenge: null, round: 2, heat: 3 }));
+check("round end shows done card", !els["doneCard"].classList.contains("hidden"));
+check("signature cleared after round", sandbox.__MIRROR.renderedSig === "");
+
+/* host pulls guest-contributed fields while keeping game flow ownership */
+S.role = "host";
+sandbox.applyRemoteState(feedState({
+  status: "setup", target: null, challenge: null,
+  truthStreak: { G: 2 }, ledger: { G: [{ reason: "refused a dare", amount: 100 }] },
+}));
+check("host accepts guest penalty ledger", S.ledger.G && S.ledger.G.length === 1);
+check("host accepts guest streak", S.truthStreak.G === 2);
+check("streak pill re-rendered on host", els["streaks"].innerHTML.includes("G"));
+
+/* oath arrives through the feed exactly once */
+S.role = "guest"; S.oathSworn = false;
+sandbox.applyRemoteState(feedState({ status: "oath", challenge: null, round: 5 }));
+check("guest sees oath mirrored from feed", !els["oathCard"].classList.contains("hidden"));
+const actionsAfterOath = sandbox.__netCalls.filter(u => u.includes("/api/room/action") && u.includes("set_status")).length;
+check("guest mirror does not re-broadcast oath", actionsAfterOath === 0);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

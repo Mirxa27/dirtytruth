@@ -401,6 +401,7 @@ const I18N = {
     netFail:"Take a deep breath and try again.",
     skipConfirm:"{name} skips this step — that's a {p} penalty. Confirm?",
     refuseConfirm:"{name} refuses to perform the {type} — that's a {p} penalty. Confirm?",
+    reconnecting:"Reconnecting…"
   },
   es: {
     rtl: false,
@@ -438,6 +439,7 @@ const I18N = {
     netFail:"Respira hondo y vuelve a intentarlo.",
     skipConfirm:"{name} salta este paso — es una penalización de {p}. ¿Confirmar?",
     refuseConfirm:"{name} se niega a hacer la {type} — es una penalización de {p}. ¿Confirmar?",
+    reconnecting:"Reconectando…"
   },
   fr: {
     rtl: false,
@@ -475,6 +477,7 @@ const I18N = {
     netFail:"Respirez un bon coup et réessayez.",
     skipConfirm:"{name} passe cette étape — c'est une pénalité de {p}. Confirmer ?",
     refuseConfirm:"{name} refuse de faire le {type} — c'est une pénalité de {p}. Confirmer ?",
+    reconnecting:"Reconnexion…"
   },
   de: {
     rtl: false,
@@ -512,6 +515,7 @@ const I18N = {
     netFail:"Atme tief durch und versuch es noch einmal.",
     skipConfirm:"{name} überspringt diesen Schritt — das kostet {p} Strafe. Bestätigen?",
     refuseConfirm:"{name} verweigert die {type} — das kostet {p} Strafe. Bestätigen?",
+    reconnecting:"Verbinde erneut…"
   },
   it: {
     rtl: false,
@@ -549,6 +553,7 @@ const I18N = {
     netFail:"Fai un respiro profondo e riprova.",
     skipConfirm:"{name} salta questo passo — è una penalità di {p}. Confermi?",
     refuseConfirm:"{name} rifiuta di fare la {type} — è una penalità di {p}. Confermi?",
+    reconnecting:"Riconnessione…"
   },
   pt: {
     rtl: false,
@@ -586,6 +591,7 @@ const I18N = {
     netFail:"Respire fundo e tente de novo.",
     skipConfirm:"{name} pula este passo — é uma penalidade de {p}. Confirmar?",
     refuseConfirm:"{name} recusa fazer o {type} — é uma penalidade de {p}. Confirmar?",
+    reconnecting:"Reconectando…"
   },
   hi: {
     rtl: false,
@@ -623,6 +629,7 @@ const I18N = {
     netFail:"गहरी सांस लें और फिर कोशिश करें।",
     skipConfirm:"{name} यह चरण छोड़ता है — {p} जुर्माना है। पुष्टि करें?",
     refuseConfirm:"{name} {type} करने से मना करता है — {p} जुर्माना है। पुष्टि करें?",
+    reconnecting:"फिर से जुड़ रहे हैं…"
   },
   ja: {
     rtl: false,
@@ -660,6 +667,7 @@ const I18N = {
     netFail:"深呼吸して、もう一度試してください。",
     skipConfirm:"{name}がこのステップをスキップ — {p}の罰金です。よろしいですか？",
     refuseConfirm:"{name}が{type}を拒否 — {p}の罰金です。よろしいですか？",
+    reconnecting:"再接続中…"
   },
   zh: {
     rtl: false,
@@ -697,6 +705,7 @@ const I18N = {
     netFail:"深呼吸，然后再试一次。",
     skipConfirm:"{name} 跳过此步骤——将罚款 {p}。确认吗？",
     refuseConfirm:"{name} 拒绝执行{type}——将罚款 {p}。确认吗？",
+    reconnecting:"重新连接中…"
   },
   ar: {
     rtl: true,
@@ -734,6 +743,7 @@ const I18N = {
     netFail:"خذ نفساً عميقاً وحاول مجدداً.",
     skipConfirm:"{name} يتخطى هذه الخطوة — غرامة {p}. هل تؤكدان؟",
     refuseConfirm:"{name} يرفض تنفيذ {type} — غرامة {p}. هل تؤكدان؟",
+    reconnecting:"جارٍ إعادة الاتصال…"
   },
 };
 
@@ -1030,38 +1040,124 @@ async function api(path, body, method="POST"){
   return r.json();
 }
 function roomAction(action, payload={}){
-  if(!state.roomCode) return;
+  if(!state.roomCode || state.mirrorBusy) return;
   api("/api/room/action", {code: state.roomCode, action, ...payload}).catch(()=>{});
+}
+function challengeSig(c){
+  if(!c || !Array.isArray(c.steps) || !c.steps.length) return "";
+  return (c.type||"") + "|" + c.title + "|" + c.steps[0].instruction;
+}
+let pollErrors = 0;
+function setRoomLink(ok){
+  const dot = $("#roomGameDot"), txt = $("#roomGameText");
+  if(!dot || !txt || !state.roomCode) return;
+  dot.classList.toggle("ok", !!ok);
+  if(state.role === "host" && state.guestJoined){ txt.textContent = ok ? t("joined") : t("reconnecting"); }
+  else if(state.role === "guest"){ txt.textContent = ok ? t("roomWatching", {code: state.roomCode}) : t("reconnecting"); }
+}
+async function pollRoomState(){
+  try{
+    const d = await api(`/api/room/state?code=${state.roomCode}&since=${state.roomVersion}`, null, "GET");
+    if(d.error){ stopRoomPolling(); dropRoomSession(); return; }
+    pollErrors = 0;
+    if(!$("#roomGameCard").classList.contains("hidden")) setRoomLink(true);
+    if(d.version !== state.roomVersion){
+      state.roomVersion = d.version;
+      applyRemoteState(d.state);
+    }
+  }catch(e){
+    pollErrors++;
+    if(pollErrors >= 2 && !$("#roomGameCard").classList.contains("hidden")) setRoomLink(false);
+  }
 }
 function startRoomPolling(){
   stopRoomPolling();
+  let skipTicks = 0; // back off after consecutive errors
   state.roomPoll = setInterval(async ()=>{
     if(!state.roomCode) return stopRoomPolling();
-    try{
-      const d = await api(`/api/room/state?code=${state.roomCode}&since=${state.roomVersion}`, null, "GET");
-      if(d.error) return;
-      if(d.version !== state.roomVersion){
-        state.roomVersion = d.version;
-        applyRemoteState(d.state);
-      }
-    }catch(e){}
+    if(document.hidden) return;             // save battery — catch up on visible
+    if(skipTicks > 0){ skipTicks--; return; }
+    await pollRoomState();
+    if(pollErrors >= 3) skipTicks = Math.min(6, pollErrors * 2);
   }, 1500);
 }
+document.addEventListener("visibilitychange", () => {
+  // when the tab comes back, re-sync immediately instead of waiting a tick
+  if(document.visibilityState === "visible" && state.roomCode && state.roomPoll) pollRoomState();
+});
 function stopRoomPolling(){ if(state.roomPoll){ clearInterval(state.roomPoll); state.roomPoll = null; } }
+const MIRROR = {
+  renderedSig: "",   // challenge currently displayed from the host feed
+  appliedStep: -1,   // step mirrored into the local timer
+  observedRound: 1,  // round last seen on the server
+  oathShown: false,  // oath already presented from the feed
+};
+window.__MIRROR = MIRROR;
+function renderRoundDone(){
+  $("#roundNum").textContent = state.round;
+  $("#timerCard").classList.add("hidden");
+  $("#challengeCard").classList.add("hidden");
+  phaseCinematic();
+  burstConfetti(40);
+  $("#doneText").textContent = t("complete", {name: (state.target && state.target.name) || ""});
+  $("#doneSub").textContent = "";
+  $("#doneCard").classList.remove("hidden");
+  SFX.chime();
+}
 function applyRemoteState(s){
-  // guest mirrors host state
+  // ---- fields BOTH roles accept from the server -------------------------
+  // guest-contributed data and prefs flow both ways.
+  state.truthStreak = s.truthStreak || {};
+  state.ledger = s.ledger || {};
+  state.recent = s.recent || [];
+  state.prefs = s.prefs || {};
+  if(s.oathSworn && !state.oathSworn){ state.oathSworn = true; saveState(); }
+
   if(state.role === "guest"){
+    // guest fully mirrors the host-driven game
+    const prevRound = MIRROR.observedRound;
     state.heat = s.heat; state.round = s.round; state.target = s.target;
-    state.challenge = s.challenge; state.stepIdx = s.stepIdx;
-    state.truthStreak = s.truthStreak||{}; state.ledger = s.ledger||{};
-    state.oathSworn = s.oathSworn; state.recent = s.recent||[];
-    state.prefs = s.prefs||{};
+    state.challenge = s.challenge;
+    state.stepIdx = s.stepIdx; state.status = s.status;
     if(s.players && s.players[0]) state.players = s.players;
     renderPhase(); renderStreaks(); renderLedger(); updateHeatLabel();
-    $("#roundNum").textContent = state.round;
-    if(s.challenge && s.status === "playing") renderChallenge();
+
+    // oath appears on the partner's screen too
+    if(s.status === "oath" && !state.oathSworn && !MIRROR.oathShown){
+      MIRROR.oathShown = true;
+      showOath(true);
+    }
+
+    const sig = challengeSig(s.challenge);
+    if(sig && sig !== MIRROR.renderedSig){
+      // a fresh challenge arrived — show it, gate the timer on Begin.
+      // Dares re-speak every step as it mirrors, so stay quiet here.
+      MIRROR.renderedSig = sig;
+      MIRROR.appliedStep = -1;
+      $("#doneCard").classList.add("hidden");
+      $("#choiceCard").classList.add("hidden");
+      renderChallenge({silent: s.challenge.type !== "truth"});
+    } else if(sig && sig === MIRROR.renderedSig && s.stepIdx !== MIRROR.appliedStep && s.status === "playing"){
+      // the same challenge advanced a step — mirror the timed step live
+      MIRROR.appliedStep = s.stepIdx;
+      startStep(Math.max(0, Math.min(s.stepIdx, (s.challenge.steps.length||1)-1)), {mirror:true});
+    }
+    if(!sig && MIRROR.renderedSig){
+      // challenge cleared -> the round finished on the host's device
+      MIRROR.renderedSig = "";
+      MIRROR.appliedStep = -1;
+      if(s.round > prevRound) renderRoundDone();
+      else { $("#timerCard").classList.add("hidden"); $("#challengeCard").classList.add("hidden"); }
+    }
+    MIRROR.observedRound = s.round;
+
+    // guests flip the waiting card off once they've joined themselves
+    if(s.players && s.players[1] && s.players[1].joined){ state.guestJoined = true; }
+    if(state.oathSworn || s.status !== "oath") $("#spinBtn").disabled = false;
   } else if(state.role === "host"){
-    // host: just track guest join
+    // host keeps owning heat/target/challenge/status locally, but pulls in
+    // anything the GUEST may have changed (penalties, streak picks, oath).
+    renderStreaks(); renderLedger();
     if(s.players && s.players[1] && s.players[1].joined && !state.guestJoined){
       state.guestJoined = true;
       $("#roomStatusText").textContent = t("joined");
@@ -1256,7 +1352,7 @@ async function generateChallenge(chosen){
   renderChallenge();
 }
 
-function renderChallenge(){
+function renderChallenge(opts){
   const c = state.challenge; if(!c) return;
   const isTruth = c.type === "truth";
   const truthPrefix = t("answerOutLoud");
@@ -1276,7 +1372,7 @@ function renderChallenge(){
   const speakText = isTruth
     ? `${t("truth")} for ${state.target.name}. ${c.title}. ${displaySteps.map(s=>s.instruction).join(" ")}`
     : `${t("dare")} for ${state.target.name}. ${c.title}. ` + c.steps.map((s,i)=>`Step ${i+1}. ${s.instruction}`).join(" ");
-  if(state.voice) speak(speakText);
+  if(state.voice && !(opts && opts.silent)) speak(speakText);
 }
 
 /* =========================================================================
@@ -1289,7 +1385,7 @@ function computeRemaining(endAt, now){
   return Math.max(0, ((endAt - now) / 1000));
 }
 window.computeRemaining = computeRemaining;
-function startStep(idx){
+function startStep(idx, opts){
   const c = state.challenge; if(!c) return;
   state.stepIdx = idx;
   const step = c.steps[idx];
@@ -1308,7 +1404,7 @@ function startStep(idx){
   timerTotal = step.seconds; timerRemaining = step.seconds; timerPaused = false;
   timerEndAt = Date.now() + step.seconds * 1000;
   updateTimerDisplay();
-  if(state.roomCode) roomAction("set_step", {step: idx});
+  if(state.roomCode && !(opts && opts.mirror)) roomAction("set_step", {step: idx});
   clearInterval(timerInt);
   timerInt = setInterval(tick, 200);
   if(state.voice && !isTruth) speak(`Step ${idx+1}. ${step.instruction}`);
@@ -1382,7 +1478,7 @@ function finishChallenge(){
 /* =========================================================================
    Oath
    ========================================================================= */
-function showOath(){
+function showOath(mirror){
   $("#oathText").innerHTML =
     `Before we go any deeper, you two seal the rules.<br><br>` +
     `We swear to play this game <b>completely seriously</b>. Every truth is answered honestly, out loud, with no lies and no dodging. Every dare is performed exactly as given, all the way through. ` +
@@ -1393,7 +1489,7 @@ function showOath(){
   $("#spinBtn").disabled = true;
   SFX.gong(); buzz(200);
   if(state.voice) speak("Before we go deeper, you two seal the rules. Read the oath, and swear it.");
-  if(state.roomCode) roomAction("set_status", {status: "oath"});
+  if(state.roomCode && !mirror) roomAction("set_status", {status: "oath"});
 }
 $("#oathBtn").addEventListener("click", () => {
   state.oathSworn = true;
@@ -1473,6 +1569,7 @@ $("#newGameBtn").addEventListener("click", () => {
   state.truthStreak = {}; state.recent = []; state.spinning = false; state.forcedDare = false;
   state.oathSworn = false; state.ledger = {}; state.prefs = {};
   state.roomCode = null; state.role = null; state.guestJoined = false;
+  MIRROR.renderedSig = ""; MIRROR.appliedStep = -1; MIRROR.oathShown = false; MIRROR.observedRound = 1;
   stopRoomPolling(); stopTimer(); releaseWakeLock();
   localStorage.removeItem(SAVE_KEY);
   $("#gameUI").classList.add("hidden");
@@ -1508,7 +1605,22 @@ async function sendChat(){
     const d = await api("/api/chat", {message: msg, players: state.players, target: state.target?state.target.name:null, heat: state.heat, recent: state.recent, lang: uiLang});
     typing.remove();
     addChat("cassia", d.reply);
-    if(d.heat){ state.heat = d.heat; updateHeatLabel(); renderPhase(); saveState(); }
+    if(d.heat){
+      state.heat = d.heat; updateHeatLabel(); renderPhase(); saveState();
+      if(state.roomCode) roomAction("set_heat", {heat: d.heat});
+      if(state.voice) speak(t("heatRises", {h: d.heat}));
+    }
+    // Cassia can fire a challenge straight from chat ("give me a dare").
+    // Solo + host only — guests don't steer the shared game flow.
+    const canFireFromChat = !state.roomCode || state.role === "host";
+    const challengeBusy = state.spinning
+      || !$("#challengeCard").classList.contains("hidden")
+      || !$("#timerCard").classList.contains("hidden")
+      || !$("#choiceCard").classList.contains("hidden");
+    if(canFireFromChat && (d.type === "truth" || d.type === "dare") && !challengeBusy){
+      if(!state.target) state.target = state.players[(Math.random()*state.players.length)|0];
+      await generateChallenge(d.type);
+    }
     if(state.voice) speak(d.reply);
   }catch(e){
     typing.remove();
