@@ -5,7 +5,6 @@ incoming request into a WSGI environ, run the Flask app, and return the
 WSGI response as (status, headers, body).
 """
 import io
-import json
 import os
 import sys
 
