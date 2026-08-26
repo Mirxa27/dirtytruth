@@ -24,3 +24,7 @@ rooms.db-shm
 
 # Private runtime secrets
 secrets.env
+.vercel
+.env*
+!.env.example
+.env.local
