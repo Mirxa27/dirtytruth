@@ -49,6 +49,16 @@
   input[type=text],select{width:100%;background:var(--card2);border:1px solid var(--line);
     color:var(--text);border-radius:12px;padding:12px 14px;font-size:1rem;outline:none}
   input[type=text]:focus,select:focus{border-color:var(--purple)}
+  /* Language dropdown — themed end-to-end: native pickers inherit these or
+     they render white-on-white/black-on-black on mobile browsers */
+  select{
+    -webkit-appearance:none;appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23ff2d78' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 12px center;
+    padding-right:34px;cursor:pointer;color:var(--text)!important;font-weight:600;
+  }
+  select option,select optgroup{background:#14141f;color:#f5f5f7}
+  body.rtl select{background-position:left 12px center;padding-right:12px;padding-left:34px}
   .row{display:flex;gap:10px}
   .row>*{flex:1}
 
@@ -382,6 +392,8 @@ const I18N = {
     start:"Start the game 🔥", round:"Round", new:"↺ New", spinHint:"Set the heat, then spin the bottle",
     spin:"🍾 Spin the Bottle", penaltyNote:"💸 $100 penalty — skip a task or refuse to perform it, and you owe your partner $100.",
     oathTitle:"The Oath", oathSwear:"I swear it — let's play for real 🔥",
+    oathIntro:"Before we go any deeper, you two seal the rules.",
+    oathBody:"We swear to play this game <b>completely seriously</b>. Every truth is answered honestly, out loud, with no lies and no dodging. Every dare is performed exactly as given, all the way through. If either of us <b>skips a task or refuses to perform it</b>, we owe the other <b>{p}</b> — no arguments, no take-backs. What we reveal here is for each other. We go as deep as the game takes us.",
     truth:"Truth", dare:"Dare", begin:"▶ Begin", pause:"⏸ Pause", skip:"⏭ Skip step",
     notPerformed:"✖ Not performed — pay $100", next:"Next step →", again:"Spin again 🍾",
     cassia:"Cassia", chatPh:"Talk to Cassia…", send:"Send",
@@ -420,6 +432,8 @@ const I18N = {
     start:"Comenzar el juego 🔥", round:"Ronda", new:"↺ Nuevo", spinHint:"Ajusta el calor y gira la botella",
     spin:"🍾 Girar la botella", penaltyNote:"💸 Penalización de $100 — salta una tarea o negarte a hacerla y debes $100 a tu pareja.",
     oathTitle:"El Juramento", oathSwear:"Lo juro — juguemos en serio 🔥",
+    oathIntro:"Antes de ir más lejos, sellan las reglas.",
+    oathBody:"Juramos jugar <b>completamente en serio</b>. Cada verdad se responde con honestidad, en voz alta, sin mentiras ni evasivas. Cada reto se cumple tal como se pide, hasta el final. Si alguien <b>salta o se niega a cumplirlo</b>, debe al otro <b>{p}</b>. Lo que aquí se revela queda entre nosotros. Vamos tan profundo como el juego lleve.",
     truth:"Verdad", dare:"Reto", begin:"▶ Comenzar", pause:"⏸ Pausa", skip:"⏭ Saltar paso",
     notPerformed:"✖ No realizado — paga $100", next:"Siguiente paso →", again:"Girar de nuevo 🍾",
     cassia:"Cassia", chatPh:"Habla con Cassia…", send:"Enviar",
@@ -458,6 +472,8 @@ const I18N = {
     start:"Commencer le jeu 🔥", round:"Manche", new:"↺ Nouveau", spinHint:"Réglez la chaleur, puis faites tourner la bouteille",
     spin:"🍾 Faire tourner", penaltyNote:"💸 Pénalité de 100 $ — sautez une tâche ou refusez de l'accomplir et vous devez 100 $ à votre partenaire.",
     oathTitle:"Le Serment", oathSwear:"Je le jure — jouons pour de vrai 🔥",
+    oathIntro:"Avant d'aller plus loin, vous scellez les règles.",
+    oathBody:"Nous jurons de jouer <b>totalement au sérieux</b>. Chaque vérité est répondue honnêtement, à voix haute, sans mensonge ni esquive. Chaque défi est accompli tel quel, jusqu'au bout. Si l'un de nous <b>saute ou refuse une tâche</b>, il doit à l'autre <b>{p}</b>. Ce qui se révèle ici reste entre nous. Nous irons aussi loin que le jeu nous mène.",
     truth:"Vérité", dare:"Défi", begin:"▶ Commencer", pause:"⏸ Pause", skip:"⏭ Passer l'étape",
     notPerformed:"✖ Non accompli — payez 100 $", next:"Étape suivante →", again:"Retourner 🍾",
     cassia:"Cassia", chatPh:"Parlez à Cassia…", send:"Envoyer",
@@ -496,6 +512,8 @@ const I18N = {
     start:"Spiel starten 🔥", round:"Runde", new:"↺ Neu", spinHint:"Stelle die Wärme ein, dann drehe die Flasche",
     spin:"🍾 Flasche drehen", penaltyNote:"💸 100 $ Strafe — springe eine Aufgabe über oder verweigere sie, und du schuldest deinem Partner 100 $.",
     oathTitle:"Der Eid", oathSwear:"Ich schwöre es — lass uns ernst spielen 🔥",
+    oathIntro:"Bevor es weitergeht, besiegelt ihr die Regeln.",
+    oathBody:"Wir schwören, <b>völlig ernsthaft</b> zu spielen. Jede Wahrheit wird ehrlich und laut beantwortet — ohne Lügen, ohne Ausweichen. Jede Mutprobe wird genau so gemacht, ganz bis zum Ende. Wer eine Aufgabe <b>überspringt oder verweigert</b>, schuldet dem anderen <b>{p}</b>. Was wir hier zeigen, bleibt zwischen uns. Wir gehen so tief, wie das Spiel führt.",
     truth:"Wahrheit", dare:"Mutprobe", begin:"▶ Start", pause:"⏸ Pause", skip:"⏭ Schritt überspringen",
     notPerformed:"✖ Nicht erledigt — zahle 100 $", next:"Nächster Schritt →", again:"Nochmal drehen 🍾",
     cassia:"Cassia", chatPh:"Sprich mit Cassia…", send:"Senden",
@@ -534,6 +552,8 @@ const I18N = {
     start:"Inizia il gioco 🔥", round:"Mossa", new:"↺ Nuovo", spinHint:"Imposta il calore, poi gira la bottiglia",
     spin:"🍾 Gira la bottiglia", penaltyNote:"💸 Penalità di $100 — salta un compito o rifiutalo e devi $100 al tuo partner.",
     oathTitle:"Il Giuramento", oathSwear:"Lo giuro — giochiamo sul serio 🔥",
+    oathIntro:"Prima di andare più a fondo, sigillate le regole.",
+    oathBody:"Giuriamo di giocare <b>completamente sul serio</b>. Ogni verità si risponde con onestà, ad alta voce, senza bugie né scuse. Ogni sfida si svolge come indicato, fino alla fine. Chi <b>salta o rifiuta un compito</b> deve all'altro <b>{p}</b>. Ciò che si rivela qui resta tra noi. Andiamo fino in fondo, dove il gioco porta.",
     truth:"Verità", dare:"Sfida", begin:"▶ Inizia", pause:"⏸ Pausa", skip:"⏭ Salta passo",
     notPerformed:"✖ Non eseguito — paga $100", next:"Passo successivo →", again:"Gira di nuovo 🍾",
     cassia:"Cassia", chatPh:"Parla con Cassia…", send:"Invia",
@@ -572,6 +592,8 @@ const I18N = {
     start:"Começar o jogo 🔥", round:"Rodada", new:"↺ Novo", spinHint:"Ajuste o calor, então gire a garrafa",
     spin:"🍾 Girar a garrafa", penaltyNote:"💸 Penalidade de $100 — pule uma tarefa ou recuse e deve $100 ao seu parceiro.",
     oathTitle:"O Juramento", oathSwear:"Eu juro — vamos jogar a sério 🔥",
+    oathIntro:"Antes de irmos mais fundo, vocês selam as regras.",
+    oathBody:"Juramos jogar <b>completamente a sério</b>. Cada verdade é respondida com honestidade, em voz alta, sem mentiras nem desvios. Cada desafio é cumprido como pedido, até o fim. Se um de nós <b>pular ou recusar uma tarefa</b>, deve ao outro <b>{p}</b>. O que se revela aqui fica entre nós. Vamos tão fundo quanto o jogo levar.",
     truth:"Verdade", dare:"Desafio", begin:"▶ Começar", pause:"⏸ Pausa", skip:"⏭ Pular passo",
     notPerformed:"✖ Não feito — pague $100", next:"Próximo passo →", again:"Girar de novo 🍾",
     cassia:"Cassia", chatPh:"Fale com Cassia…", send:"Enviar",
@@ -610,6 +632,8 @@ const I18N = {
     start:"खेल शुरू करें 🔥", round:"राउंड", new:"↺ नया", spinHint:"गर्मी सेट करें, फिर बोतल घुमाएँ",
     spin:"🍾 बोतल घुमाएँ", penaltyNote:"💸 $100 जुर्माना — किसी कार्य को छोड़ें या मना करें, और आप अपने साथी को $100 देते हैं।",
     oathTitle:"शपथ", oathSwear:"मैं शपथ लेता हूँ — आइए गंभीरता से खेलें 🔥",
+    oathIntro:"और गहरे जाने से पहले, आप दोनों नियम सील करते हैं।",
+    oathBody:"हम शपथ लेते हैं कि <b>पूरी गंभीरता</b> से खेलेंगे। हर सच ईमानदारी से, ज़ोर से, बिना झूठ और बचकानी के कहा जाएगा। हर चुनौती वैसे ही पूरी की जाएगी, अंत तक। अगर कोई <b>काम छोड़े या मना करे</b>, तो वह दूसरे को <b>{p}</b> देगा। यहाँ जो प्रकट हो, वह हम दोनों के बीच रहेगा। हम उतना गहरा जाएँगे जितना खेल ले जाए।",
     truth:"सच", dare:"चुनौती", begin:"▶ शुरू", pause:"⏸ रोकें", skip:"⏭ चरण छोड़ें",
     notPerformed:"✖ नहीं किया — $100 दें", next:"अगला चरण →", again:"फिर से घुमाएँ 🍾",
     cassia:"कैसिया", chatPh:"कैसिया से बात करें…", send:"भेजें",
@@ -648,6 +672,8 @@ const I18N = {
     start:"ゲーム開始 🔥", round:"ラウンド", new:"↺ 新規", spinHint:"熱を設定してボトルを回す",
     spin:"🍾 ボトルを回す", penaltyNote:"💸 $100の罰金 — タスクをスキップまたは拒否すると、パートナーに$100を支払います。",
     oathTitle:"誓い", oathSwear:"誓います — 本気で遊びましょう 🔥",
+    oathIntro:"さらに深く進む前に、二人でルールを誓います。",
+    oathBody:"私たちは<b>本気で</b>遊ぶと誓います。真実は誠実に、声に出して、嘘もごまかしもなく答えます。挑戦は指示どおり最後までやり遂げます。もし<b>タスクをスキップ、または拒否したら</b>、相手に<b>{p}</b>を支払います。ここで明かすことは二人だけのもの。ゲームが導く限りまで深く進みます。",
     truth:"真実", dare:"挑戦", begin:"▶ 開始", pause:"⏸ 一時停止", skip:"⏭ ステップをスキップ",
     notPerformed:"✖ 未実行 — $100を支払う", next:"次のステップ →", again:"もう一度回す 🍾",
     cassia:"カシア", chatPh:"カシアと話す…", send:"送信",
@@ -686,6 +712,8 @@ const I18N = {
     start:"开始游戏 🔥", round:"回合", new:"↺ 新", spinHint:"设置热度，然后转动瓶子",
     spin:"🍾 转动瓶子", penaltyNote:"💸 $100罚款——跳过或拒绝执行任务，你就欠伴侣$100。",
     oathTitle:"誓言", oathSwear:"我发誓——让我们认真玩 🔥",
+    oathIntro:"在更进一步之前，你们共同封印规则。",
+    oathBody:"我们发誓<b>完全认真地</b>游戏。每个真相都诚实、出声地回答，不说谎也不回避。每个胆量都按指令做到底。若有人<b>跳过或拒绝任务</b>，就欠对方<b>{p}</b>。这里揭示的一切只属于彼此。游戏带我们多深，我们就走多深。",
     truth:"真相", dare:"胆量", begin:"▶ 开始", pause:"⏸ 暂停", skip:"⏭ 跳过步骤",
     notPerformed:"✖ 未执行——支付$100", next:"下一步 →", again:"再转一次 🍾",
     cassia:"Cassia", chatPh:"和Cassia聊天…", send:"发送",
@@ -724,6 +752,8 @@ const I18N = {
     start:"ابدأ اللعبة 🔥", round:"جولة", new:"↺ جديد", spinHint:"اضبط الحرارة ثم أدر القارورة",
     spin:"🍾 أدر القارورة", penaltyNote:"💸 غرامة 100$ — تخطَّ مهمة أو ارفض تنفيذها فتدين شريكك بـ 100$.",
     oathTitle:"القسم", oathSwear:"أقسم — لنلعب بجدّية 🔥",
+    oathIntro:"قبل أن نتعمق أكثر، تختمان القواعد معاً.",
+    oathBody:"نقسم أن نلعب <b>بكل جدّية</b>. كل حقيقة تُجاب بصدق وبصوت عالٍ، دون كذب أو مراوغة. وكل تحدٍّ يُنفَّذ كما هو حتى النهاية. من <b>يتخطى مهمة أو يرفضها</b> يدين لآخره بـ <b>{p}</b>. ما يُكشف هنا يبقى بيننا. نذهب إلى أي عمق تأخذنا اللعبة.",
     truth:"الحقيقة", dare:"التحدّي", begin:"▶ ابدأ", pause:"⏸ إيقاف", skip:"⏭ تخطّي الخطوة",
     notPerformed:"✖ لم يُنفَّذ — ادفع 100$", next:"الخطوة التالية →", again:"أدر مجدداً 🍾",
     cassia:"Cassia", chatPh:"تحدّث إلى Cassia…", send:"إرسال",
@@ -764,8 +794,11 @@ function applyLang(){
   document.querySelectorAll("[data-i18n]").forEach(el => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll("[data-i18n-ph]").forEach(el => { el.placeholder = t(el.dataset.i18nPh); });
   renderPhase(); renderStreaks(); renderLedger(); updateHeatLabel();
-  if(state.challenge) renderChallenge();
-  if(!state.oathSworn && state.round === OATH_ROUND) showOath();
+  // keep the dropdown reflecting the active language (e.g. after a remote switch)
+  const ls = $("#langSelect"); if(ls && ls.value !== uiLang) ls.value = uiLang;
+  // refresh visible challenge copy in the new language — NEVER replay its TTS
+  if(state.challenge) renderChallenge({silent:true});
+  if(!state.oathSworn && state.round === OATH_ROUND) showOath(true);
 }
 
 /* =========================================================================
@@ -1112,6 +1145,12 @@ function renderRoundDone(){
   SFX.chime();
 }
 function applyRemoteState(s){
+  // ---- two-way language sync: whoever switches, both devices follow ------
+  if(s.lang && s.lang !== uiLang && I18N[s.lang]){
+    uiLang = s.lang;
+    try{ localStorage.setItem("dt_ui_lang", uiLang); }catch(e){}
+    applyLang();
+  }
   // ---- fields BOTH roles accept from the server -------------------------
   // guest-contributed data and prefs flow both ways.
   state.truthStreak = s.truthStreak || {};
@@ -1487,15 +1526,12 @@ function finishChallenge(){
    ========================================================================= */
 function showOath(mirror){
   $("#oathText").innerHTML =
-    `Before we go any deeper, you two seal the rules.<br><br>` +
-    `We swear to play this game <b>completely seriously</b>. Every truth is answered honestly, out loud, with no lies and no dodging. Every dare is performed exactly as given, all the way through. ` +
-    `If either of us <b>skips a task or refuses to perform it</b>, we owe the other <b>$${PENALTY}</b> — no arguments, no take-backs. ` +
-    `What we reveal here is for each other. We go as deep as the game takes us.`;
+    esc(t("oathIntro")) + "<br><br>" + t("oathBody", {p: "$" + PENALTY});
   $("#oathCard").classList.remove("hidden");
   $("#oathCard").classList.add("enter");
   $("#spinBtn").disabled = true;
   SFX.gong(); buzz(200);
-  if(state.voice) speak("Before we go deeper, you two seal the rules. Read the oath, and swear it.");
+  if(state.voice) speak(t("oathIntro") + " " + t("oathTitle") + ".");
   if(state.roomCode && !mirror) roomAction("set_status", {status: "oath"});
 }
 $("#oathBtn").addEventListener("click", () => {

@@ -283,5 +283,25 @@ check("guest sees oath mirrored from feed", !els["oathCard"].classList.contains(
 const actionsAfterOath = sandbox.__netCalls.filter(u => u.includes("/api/room/action") && u.includes("set_status")).length;
 check("guest mirror does not re-broadcast oath", actionsAfterOath === 0);
 
+/* ---- 16. language dropdown fixes (v5.3) ---- */
+console.log("\n[language dropdown]");
+check("all langs have translated oath keys", LANGS.every(l =>
+  typeof I18N[l].oathIntro === "string" && I18N[l].oathIntro.length > 0 &&
+  typeof I18N[l].oathBody === "string" && I18N[l].oathBody.includes("{p}")));
+check("en oath interpolates $100 penalty", sandbox.window.t("oathBody", {p:"$100"}).includes("$100"));
+const langSel = sandbox.document.querySelector("#langSelect");
+S.role = "host"; S.roomCode = "KISS"; S.oathSworn = true;
+sandbox.__netCalls.length = 0;
+sandbox.applyRemoteState({ lang: "es", heat: 2, round: 1, target: null, challenge: null,
+  stepIdx: 0, status: "setup", players: S.players, truthStreak: {}, ledger: {},
+  oathSworn: true, recent: [], prefs: {} });
+check("partner device follows a remote language switch", sandbox.getUiLang() === "es");
+check("dropdown mirrors the active language", langSel.value === "es");
+check("following a switch sends no broadcast echo",
+  !sandbox.__netCalls.some(u => u.includes("/api/room/action")));
+check("switching language does not replay challenge TTS (silent re-render)",
+  !sandbox.__netCalls.some(u => u.includes("/api/tts")));
+sandbox.window.setUiLang("en"); langSel.value = "en";
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
