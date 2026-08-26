@@ -86,6 +86,8 @@ journalctl -u dirtytruth-tunnel.service --no-pager | grep -oE 'https://[a-z0-9-]
 The app and tunnel are **decoupled** — restarting the app does not change the public URL.
 
 ## Deploy (Vercel)
+**Live (production): https://dirtytruth.vercel.app**
+
 ```bash
 vercel --prod
 ```
@@ -116,6 +118,15 @@ every variable and is safe to commit.
   ```
   then set `TTS_URL=https://<that-url>/v1/audio/speech` in Vercel. Quick-tunnel
   URLs change on every restart — use a named Cloudflare tunnel if you need it stable.
+  Refresh flow after a reboot:
+  ```bash
+  NEW=$(journalctl -u dirtytruth-tts-tunnel.service --no-pager | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1)
+  vercel env rm TTS_URL production --yes && printf '%s/v1/audio/speech\n' "$NEW" | vercel env add TTS_URL production && vercel --prod
+  ```
+- **Verified working on prod:** health, CSP/noindex headers, static assets,
+  LLM generate (~3.4 s, inside the Hobby 10 s function cap), chat, Kokoro TTS
+  via the tunnel (real MP3, <1 s), full room create/join/state/action cycle,
+  non-English generation with the translation pass.
 - **Privacy:** responses carry `X-Robots-Tag: noindex, nofollow` and the page
   ships a matching meta tag, so public URLs stay out of search engines.
 
