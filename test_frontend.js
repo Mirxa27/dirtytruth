@@ -1,0 +1,191 @@
+/* Frontend logic tests — extracts the <script> from index.html and runs it in a
+   VM sandbox with a DOM stub. Verifies i18n, state, phases, penalty, oath, rooms. */
+const fs = require("fs");
+const path = require("path");
+const vm = require("vm");
+
+const html = fs.readFileSync(path.join(__dirname, "static", "index.html"), "utf8");
+const m = html.match(/<script>([\s\S]*?)<\/script>/);
+if (!m) { console.error("no <script> found"); process.exit(1); }
+const code = m[1];
+
+let passed = 0, failed = 0;
+function check(name, cond) {
+  if (cond) { passed++; console.log("  ✓ " + name); }
+  else { failed++; console.log("  ✗ " + name); }
+}
+
+/* ---- DOM stub ---- */
+function makeEl(id) {
+  const listeners = {};
+  const el = {
+    id, value: "", textContent: "", innerHTML: "", disabled: false,
+    style: {}, dataset: {}, title: "",
+    classList: {
+      _set: new Set(),
+      add(c) { this._set.add(c); },
+      remove(c) { this._set.delete(c); },
+      toggle(c, force) { const has = this._set.has(c); const want = force === undefined ? !has : force; want ? this._set.add(c) : this._set.delete(c); return want; },
+      contains(c) { return this._set.has(c); },
+    },
+    addEventListener(type, fn) { (listeners[type] = listeners[type] || []).push(fn); },
+    appendChild() {},
+    querySelectorAll() { return []; },
+    closest() { return null; },
+    click() { (listeners["click"] || []).forEach(fn => fn({ target: this })); },
+    getContext() { return { clearRect(){}, save(){}, restore(){}, translate(){}, rotate(){}, fillRect(){}, set fillStyle(v){}, set globalAlpha(v){} }; },
+    scrollTop: 0, scrollHeight: 0,
+  };
+  return el;
+}
+const els = {};
+const documentStub = {
+  getElementById(id) { if (!els[id]) els[id] = makeEl(id); return els[id]; },
+  querySelector(sel) {
+    // map #id and .class[data-for] selectors
+    if (sel.startsWith("#")) { const id = sel.slice(1); if (!els[id]) els[id] = makeEl(id); return els[id]; }
+    if (sel.includes("data-for")) { return makeEl("genderbtn"); }
+    if (sel.startsWith(".")) { return makeEl("cls"); }
+    return makeEl("q");
+  },
+  querySelectorAll() { return []; },
+  createElement() { return makeEl("dyn"); },
+  documentElement: { lang: "en", style: { setProperty(){} } },
+  body: { classList: { _set: new Set(), add(){}, remove(){}, toggle(){}, contains(){ return false; } } },
+};
+
+const localStorageStub = { _d: {}, getItem(k){ return this._d[k] ?? null; }, setItem(k,v){ this._d[k]=String(v); }, removeItem(k){ delete this._d[k]; } };
+
+const sandbox = {
+  console,
+  document: documentStub,
+  localStorage: localStorageStub,
+  fetch: async () => ({ ok: true, json: async () => ({}), blob: async () => new Blob() }),
+  Audio: function(){ return { play: async()=>{}, pause(){} }; },
+  URL: { createObjectURL: () => "blob:x" },
+  navigator: { vibrate: () => {} },
+  performance: { now: () => Date.now() },
+  requestAnimationFrame: (fn) => 0,
+  addEventListener: () => {},
+  innerWidth: 400, innerHeight: 800,
+  confirm: () => true,
+  setTimeout: (fn) => 0, clearTimeout: () => {},
+  setInterval: () => 0, clearInterval: () => {},
+  Blob: function(){},
+  AudioContext: function(){ return { currentTime: 0, createOscillator: ()=>({connect(){},start(){},stop(){},type:"",frequency:{value:0}}), createGain: ()=>({connect(){},gain:{setValueAtTime(){},exponentialRampToValueAtTime(){}}}), destination:{} }; },
+  webkitAudioContext: function(){ return {}; },
+};
+sandbox.window = sandbox;
+sandbox.globalThis = sandbox;
+vm.createContext(sandbox);
+
+try {
+  vm.runInContext(code, sandbox, { filename: "index.html" });
+} catch (e) {
+  console.error("SCRIPT ERROR:", e.message);
+  process.exit(1);
+}
+
+const S = sandbox.window.state;
+
+/* ---- 1. i18n ---- */
+console.log("\n[i18n]");
+const I18N = sandbox.window.I18N;
+check("10 languages defined", ["en","es","fr","de","it","pt","hi","ja","zh","ar"].every(c => I18N[c]));
+check("t() returns English by default", typeof sandbox.window.t("spin") === "string" && sandbox.window.t("spin").length > 0);
+check("t() interpolates vars", sandbox.window.t("chooseFate", {name: "Alex"}).includes("Alex"));
+check("t() falls back to English for missing key", sandbox.window.t("nonexistent_key_xyz") === "nonexistent_key_xyz");
+check("Arabic is RTL", I18N.ar.rtl === true);
+check("English is not RTL", I18N.en.rtl === false);
+check("each lang has phases array", ["en","es","fr","de","it","pt","hi","ja","zh","ar"].every(c => Array.isArray(I18N[c].phases) && I18N[c].phases.length === 5));
+check("each lang has heatNames", ["en","es","fr","de","it","pt","hi","ja","zh","ar"].every(c => Array.isArray(I18N[c].heatNames) && I18N[c].heatNames.length === 11));
+check("each lang has banter", ["en","es","fr","de","it","pt","hi","ja","zh","ar"].every(c => Array.isArray(I18N[c].banter) && I18N[c].banter.length >= 3));
+
+/* ---- 2. state ---- */
+console.log("\n[state]");
+check("state exists", !!S);
+check("TRUTH_LIMIT = 3", sandbox.window.TRUTH_LIMIT === 3);
+check("PENALTY = 100", sandbox.window.PENALTY === 100);
+check("OATH_ROUND = 5", sandbox.window.OATH_ROUND === 5);
+check("state has prefs", "prefs" in S);
+check("state has mode", S.mode === "solo");
+check("state has roomCode", "roomCode" in S);
+
+/* ---- 3. phases (mystery) ---- */
+console.log("\n[phases]");
+check("phase r1 = First Glance", sandbox.phaseForRound(1).name === "First Glance");
+check("phase r3 = Warming Up", sandbox.phaseForRound(3).name === "Warming Up");
+check("phase r5 = The Oath", sandbox.phaseForRound(5).name === "The Oath");
+check("phase r6 = Unveiling", sandbox.phaseForRound(6).name === "Unveiling");
+check("phase r10 = No Secrets Left", sandbox.phaseForRound(10).name === "No Secrets Left");
+S.round = 1; sandbox.renderPhase();
+check("renderPhase sets pill", els["phasePill"].innerHTML.includes("First Glance"));
+S.round = 10; sandbox.renderPhase();
+check("renderPhase updates pill", els["phasePill"].innerHTML.includes("No Secrets Left"));
+
+/* ---- 4. penalty ledger ---- */
+console.log("\n[penalty]");
+S.ledger = {};
+S.players = [{ name: "Alex", gender: "male" }, { name: "Sam", gender: "female" }];
+sandbox.window.renderLedger();
+check("ledger starts at $0", els["ledger"].innerHTML.includes("$0"));
+sandbox.window.recordPenalty("Alex", "skipped a dare step");
+check("recordPenalty adds $100", sandbox.window.penaltyTotal("Alex") === 100);
+check("ledger shows $100", els["ledger"].innerHTML.includes("$100"));
+sandbox.window.recordPenalty("Alex", "refused a truth");
+check("second penalty = $200", sandbox.window.penaltyTotal("Alex") === 200);
+check("other player still $0", sandbox.window.penaltyTotal("Sam") === 0);
+
+/* ---- 5. oath ---- */
+console.log("\n[oath]");
+S.oathSworn = false;
+S.round = 5;
+sandbox.window.showOath();
+check("showOath reveals card", !els["oathCard"].classList.contains("hidden"));
+check("oath text mentions $100", els["oathText"].innerHTML.includes("$100"));
+check("oath text mentions seriously", els["oathText"].innerHTML.toLowerCase().includes("seriously"));
+check("spin disabled during oath", els["spinBtn"].disabled === true);
+els["oathBtn"].click();
+check("oath sworn sets flag", S.oathSworn === true);
+check("oath card hidden after swear", els["oathCard"].classList.contains("hidden"));
+check("spin re-enabled after oath", els["spinBtn"].disabled === false);
+
+/* ---- 6. streaks ---- */
+console.log("\n[streaks]");
+S.truthStreak = { Alex: 0, Sam: 0 };
+sandbox.window.renderStreaks();
+check("streak renders", els["streaks"].innerHTML.includes("Alex"));
+S.truthStreak.Alex = 2;
+sandbox.window.renderStreaks();
+check("forced streak shows DARE", els["streaks"].innerHTML.includes("DARE"));
+
+/* ---- 7. persistence ---- */
+console.log("\n[persistence]");
+S.heat = 6; S.round = 7; S.oathSworn = true; S.ledger = { Alex: [{ reason: "x", amount: 100 }] };
+S.prefs = { Alex: { turnons: "feathers", fantasy: "", boundary: "no" } };
+sandbox.window.saveState();
+const saved = JSON.parse(localStorageStub.getItem("dirtytruth_save_v1"));
+check("saveState persists oathSworn", saved.oathSworn === true);
+check("saveState persists ledger", saved.ledger.Alex.length === 1);
+check("saveState persists prefs", saved.prefs.Alex.turnons === "feathers");
+check("saveState persists mode", saved.mode === "solo");
+const loaded = sandbox.window.loadState();
+check("loadState restores", loaded === true);
+check("loadState restores heat", S.heat === 6);
+check("loadState restores prefs", S.prefs.Alex.turnons === "feathers");
+
+/* ---- 8. esc ---- */
+check("esc escapes html", sandbox.window.esc('<b>"x"</b>') === "&lt;b&gt;&quot;x&quot;&lt;/b&gt;");
+
+/* ---- 9. i18n switching ---- */
+console.log("\n[i18n switch]");
+sandbox.window.setUiLang("es");
+check("Spanish spin", sandbox.window.t("spin").includes("botella"));
+sandbox.window.setUiLang("ja");
+check("Japanese spin", sandbox.window.t("spin").includes("ボトル"));
+sandbox.window.setUiLang("ar");
+check("Arabic spin", sandbox.window.t("spin").includes("القارورة"));
+sandbox.window.setUiLang("en");
+
+console.log(`\n${passed} passed, ${failed} failed`);
+process.exit(failed ? 1 : 0);

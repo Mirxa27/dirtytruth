@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Runtime data
+rooms.db
+rooms.db-wal
+rooms.db-shm
+*.log
+.live_url
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Vercel
+.vercel/

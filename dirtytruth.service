@@ -1,0 +1,23 @@
+[Unit]
+Description=Dirty Truth & Dare — Cassia AI game server (waitress on :8084)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/dirtytruth
+ExecStart=/home/ubuntu/dirtytruth/.venv/bin/python /home/ubuntu/dirtytruth/app.py
+Restart=always
+RestartSec=3
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/ubuntu/dirtytruth
+# Resource limits
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
