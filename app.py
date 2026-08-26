@@ -115,6 +115,7 @@ def security_headers(resp):
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
     resp.headers.setdefault("X-Frame-Options", "DENY")
     resp.headers.setdefault("Referrer-Policy", "no-referrer")
+    resp.headers.setdefault("X-Robots-Tag", "noindex, nofollow")
     resp.headers.setdefault("Cache-Control", "no-store")
     resp.headers.setdefault(
         "Content-Security-Policy",

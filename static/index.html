@@ -8,6 +8,7 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icon.svg">
 <meta name="theme-color" content="#0a0a0f">
+<meta name="robots" content="noindex, nofollow">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -898,7 +899,7 @@ function confettiLoop(){
 /* =========================================================================
    TTS
    ========================================================================= */
-let audioEl = null;
+let audioEl = null, lastAudioUrl = null;
 async function speak(text){
   if(!state.voice || !text) return;
   try{
@@ -906,7 +907,12 @@ async function speak(text){
     if(!r.ok) return;
     const blob = await r.blob();
     if(audioEl) audioEl.pause();
-    audioEl = new Audio(URL.createObjectURL(blob));
+    if(lastAudioUrl){ try{ URL.revokeObjectURL(lastAudioUrl); }catch(e){} }
+    const url = URL.createObjectURL(blob);
+    lastAudioUrl = url;
+    audioEl = new Audio(url);
+    // release the blob once it has played — long sessions would otherwise leak
+    audioEl.addEventListener("ended", () => { try{ URL.revokeObjectURL(url); }catch(e){} });
     audioEl.play().catch(()=>{});
   }catch(e){}
 }

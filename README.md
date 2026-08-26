@@ -65,6 +65,8 @@ A private, mobile-first slow-burn truth-or-dare game for couples, powered by the
 - `static/index.html` — single-file mobile frontend (vanilla JS, no build step).
 - `api/index.py` — Vercel serverless entrypoint (WSGI wrapper).
 - `dirtytruth.service` / `dirtytruth-tunnel.service` — systemd units (app + Cloudflare tunnel).
+- `dirtytruth-tts-tunnel.service` — optional public tunnel for Kokoro (voice mode off-box).
+- `.env.example` — annotated environment variables for Vercel/CLI deploys.
 
 ## Run (local)
 ```bash
@@ -87,23 +89,35 @@ The app and tunnel are **decoupled** — restarting the app does not change the 
 ```bash
 vercel --prod
 ```
-Env vars (set in the Vercel dashboard or CLI):
+Env vars — see **[.env.example](.env.example)** for the full annotated list; set
+them in the Vercel dashboard or `vercel env add <NAME> production`:
 - `LLM_URL` / `LLM_KEY` / `LLM_MODEL` — OpenAI-compatible LLM endpoint.
-- `TTS_URL` — public URL of the Kokoro TTS server (defaults to the local one;
-  on Vercel point it at a public tunnel of the Kokoro server).
+- `TTS_URL` — public URL of the Kokoro TTS server (see "Voice on Vercel").
+- `DT_RL_*` — per-IP rate limits (optional; sane defaults baked in).
 
 ### Secrets (never commit them)
 Secrets resolve in this order: real environment variables → gitignored
 `secrets.env` next to `app.py` → safe defaults. For the local box, keep them in
-`secrets.env`:
-```
-LLM_URL=...        # OpenAI-compatible chat completions URL
-LLM_KEY=...        # bearer token for the LLM endpoint
-LLM_MODEL=...      # model path
-TTS_URL=http://127.0.0.1:8880/v1/audio/speech
-```
-Rate limits per IP/minute are env-tunable too: `DT_RL_GENERATE`, `DT_RL_CHAT`,
-`DT_RL_TTS` (`0` disables; defaults 12 / 20 / 20).
+`secrets.env`; for Vercel, use dashboard/CLI env vars. `.env.example` documents
+every variable and is safe to commit.
+
+### Serverless caveats (read before trusting Vercel with a session)
+- **Rooms are per-Lambda-instance on serverless.** The room store is SQLite in
+  `/tmp` (`DIRTYTRUTH_DB`, wired by `api/index.py`). Vercel may route your two
+  phones to *different* Lambda instances, each with its own throwaway DB — room
+  sync then can't find the partner. Two-device play is guaranteed only on the
+  origin box (systemd); treat Vercel as the solo-mode / demo channel.
+- **Voice on Vercel:** `/api/tts` runs inside the Lambda, so it must be able to
+  reach Kokoro over the network. Publish port 8880 through its own quick tunnel:
+  ```bash
+  sudo cp dirtytruth-tts-tunnel.service /etc/systemd/system/
+  sudo systemctl daemon-reload && sudo systemctl enable --now dirtytruth-tts-tunnel.service
+  journalctl -u dirtytruth-tts-tunnel.service --no-pager | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1
+  ```
+  then set `TTS_URL=https://<that-url>/v1/audio/speech` in Vercel. Quick-tunnel
+  URLs change on every restart — use a named Cloudflare tunnel if you need it stable.
+- **Privacy:** responses carry `X-Robots-Tag: noindex, nofollow` and the page
+  ships a matching meta tag, so public URLs stay out of search engines.
 
 ## Tests
 ```bash

@@ -1,0 +1,20 @@
+[Unit]
+Description=Dirty Truth & Dare — Kokoro TTS public tunnel (voice mode off-box)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+ExecStart=/home/ubuntu/bin/cloudflared tunnel --no-autoupdate --url http://127.0.0.1:8880
+Restart=always
+RestartSec=5
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/ubuntu/dirtytruth
+
+[Install]
+WantedBy=multi-user.target

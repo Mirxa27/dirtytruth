@@ -777,3 +777,11 @@ def test_room_state_unknown_code_is_404():
     r = app.test_client().get("/api/room/state", query_string={"code": "NOPE"})
     assert r.status_code == 404
     assert r.get_json()["error"] == "room not found"
+
+
+def test_no_private_indexing(client):
+    # intimate content on public URLs must stay out of search engines
+    r = client.get("/api/health")
+    assert r.headers.get("X-Robots-Tag") == "noindex, nofollow"
+    html = client.get("/").get_data(as_text=True)
+    assert 'name="robots"' in html and "noindex" in html
