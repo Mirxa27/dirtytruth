@@ -285,6 +285,13 @@ check("guest mirror does not re-broadcast oath", actionsAfterOath === 0);
 
 /* ---- 16. language dropdown fixes (v5.3) ---- */
 console.log("\n[language dropdown]");
+const builtSel = sandbox.document.querySelector("#langSelect");
+check("picker options show native names, never 'undefined'",
+  builtSel.innerHTML.includes("Español") &&
+  builtSel.innerHTML.includes("日本語") &&
+  !builtSel.innerHTML.includes("undefined"));
+check("all 10 options rendered", (builtSel.innerHTML.match(/<option /g) || []).length === 10);
+check("bad saved ui_lang falls back to English", sandbox.getUiLang() === "en");
 check("all langs have translated oath keys", LANGS.every(l =>
   typeof I18N[l].oathIntro === "string" && I18N[l].oathIntro.length > 0 &&
   typeof I18N[l].oathBody === "string" && I18N[l].oathBody.includes("{p}")));
