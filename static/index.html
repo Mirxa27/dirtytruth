@@ -1175,10 +1175,21 @@ function loadState(){
 /* =========================================================================
    Rooms (multi-device)
    ========================================================================= */
-async function api(path, body, method="POST"){
-  const r = await fetch(path, {method, headers:{"Content-Type":"application/json"}, body: body?JSON.stringify(body):undefined});
-  if(!r.ok) throw new Error("http " + r.status);
-  return r.json();
+async function api(path, body, method="POST", timeoutMs=0){
+  const ctrl = (typeof AbortController === "function" && timeoutMs > 0) ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => { try{ ctrl.abort("timeout"); }catch(e){} }, timeoutMs) : null;
+  try{
+    const r = await fetch(path, {
+      method,
+      headers:{"Content-Type":"application/json"},
+      body: body?JSON.stringify(body):undefined,
+      signal: ctrl ? ctrl.signal : undefined,
+    });
+    if(!r.ok) throw new Error("http " + r.status);
+    return r.json();
+  } finally {
+    if(timer) clearTimeout(timer);
+  }
 }
 function roomAction(action, payload={}){
   if(!state.roomCode || state.mirrorBusy) return;
@@ -1863,7 +1874,7 @@ async function sendChat(){
   typing.className = "msg cassia typing"; typing.textContent = "…";
   $("#chatLog").appendChild(typing);
   try{
-    const d = await api("/api/chat", {message: msg, players: state.players, target: state.target?state.target.name:null, heat: state.heat, recent: state.recent, lang: uiLang});
+    const d = await api("/api/chat", {message: msg, players: state.players, target: state.target?state.target.name:null, heat: state.heat, recent: state.recent, lang: uiLang}, "POST", 30000);
     typing.remove();
     addChat("cassia", d.reply);
     if(d.heat){
@@ -1885,7 +1896,7 @@ async function sendChat(){
     if(state.voice) speak(d.reply);
   }catch(e){
     typing.remove();
-    addChat("cassia", "I'm right here, darling — take your time.");
+    addChat("cassia", t("netFail"));
   }
 }
 $("#chatSend").addEventListener("click", sendChat);

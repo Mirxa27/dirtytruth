@@ -543,6 +543,7 @@ def chat():
     players = _clean_players(data.get("players"))
     target = data.get("target")
     target = str(target)[:30] if target else None
+    lang = get_lang(data.get("lang", "en"))
     try:
         heat = max(1, min(10, int(data.get("heat", 3))))
     except (TypeError, ValueError):
@@ -551,6 +552,12 @@ def chat():
 
     players_desc = ", ".join(
         f"{p.get('name', 'Player')} ({p.get('gender', 'partner')})" for p in players
+    )
+    lang_rule = language_directive(lang["code"])
+    lang_reminder = (
+        f"REMEMBER: reply ENTIRELY in {lang['name']} — the user may be writing in "
+        f"another language; still answer only in {lang['name']}.\n"
+        if lang["code"] != "en" else ""
     )
     user = (
         f"Players: {players_desc}\nCurrent target: {target or 'n/a'}\nCurrent heat: {heat}/10\n"
@@ -561,7 +568,7 @@ def chat():
         raw = call_llm({
             "model": LLM_MODEL,
             "messages": [
-                {"role": "system", "content": CHAT_PROMPT},
+                {"role": "system", "content": lang_rule + CHAT_PROMPT + "\n" + lang_reminder},
                 {"role": "user", "content": user},
             ],
             "temperature": 0.9,
@@ -577,19 +584,49 @@ def chat():
             out["type"] = "dare" if obj.get("type") == "dare" else "truth"
         return jsonify(out)
     except Exception:
-        try:
-            raw = call_llm({
-                "model": LLM_MODEL,
-                "messages": [
-                    {"role": "system", "content": "You are Cassia, a seductive, patient AI game host for a couples' slow-burn sex game. Reply in at most 40 words, plain text, no JSON."},
-                    {"role": "user", "content": msg},
-                ],
-                "temperature": 0.9,
-                "max_tokens": 300,
-            })
-            return jsonify({"reply": raw.strip()[:400] or "Mmm, take your time with me.", "engine": "cassia-plain"})
-        except Exception as e2:
-            return jsonify({"reply": "I'm right here, darling — take your time.", "engine": "fallback", "error": str(e2)[:200]})
+        pass
+    # second chance: plain-text mode (still strictly in-language)
+    try:
+        plain_system = (
+            "You are Cassia, a seductive, patient AI game host for a couples' slow-burn sex game. "
+            "Reply in at most 40 words, plain text, no JSON."
+            + (f" Respond ONLY in {lang['name']}." if lang["code"] != "en" else "")
+        )
+        raw = call_llm({
+            "model": LLM_MODEL,
+            "messages": [
+                {"role": "system", "content": plain_system},
+                {"role": "user", "content": msg},
+            ],
+            "temperature": 0.9,
+            "max_tokens": 300,
+        })
+        return jsonify({"reply": raw.strip()[:400] or "Mmm, take your time with me.", "engine": "cassia-plain"})
+    except Exception as e2:
+        # localizable last resort so silence never looks like the app froze
+        return jsonify({
+            "reply": get_chat_fallback(lang["code"]),
+            "engine": "fallback",
+            "error": str(e2)[:200],
+        })
+
+
+CHAT_FALLBACKS = {
+    "en": "I'm right here, darling — take your time.",
+    "es": "Aquí estoy, cariño — tómate tu tiempo.",
+    "fr": "Je suis là, chéri — prends ton temps.",
+    "de": "Ich bin hier, Schatz — lass dir Zeit.",
+    "it": "Sono qui, tesoro — prenditi il tuo tempo.",
+    "pt": "Estou aqui, querido — vá com calma.",
+    "hi": "मैं यहीं हूँ, प्रिय — धीरे-धीरे लो।",
+    "ja": "ここにいるわ、愛しい人。ゆっくりでいいの。",
+    "zh": "我就在这里，亲爱的——慢慢来。",
+    "ar": "أنا هنا يا حبيبي، خذ وقتك.",
+}
+
+
+def get_chat_fallback(code):
+    return CHAT_FALLBACKS.get(get_lang(code)["code"], CHAT_FALLBACKS["en"])
 
 
 @app.route("/api/streak", methods=["POST"])
