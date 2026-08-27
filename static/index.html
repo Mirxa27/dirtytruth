@@ -85,8 +85,16 @@
   .heatlabel{font-size:.72rem;color:var(--dim);text-align:center;margin-top:2px}
 
   /* bottle */
-  .bottle-stage{display:flex;justify-content:center;padding:10px 0}
+  .bottle-stage{display:flex;justify-content:center;align-items:center;gap:4px;padding:10px 0}
+  .seat{flex:1;text-align:center;font-size:.8rem;color:var(--dim);padding:12px 4px;line-height:1.25;
+    border:1px dashed transparent;border-radius:12px;max-width:110px;transition:.25s;word-break:break-word}
+  .seat.picked{color:#fff;border-color:var(--pink);background:rgba(255,45,120,.12);
+    box-shadow:0 0 16px rgba(255,45,120,.35)}
+  .bottle-wrap{display:inline-block}
+  .bottle-wrap.landpop{animation:landpop .5s ease}
+  @keyframes landpop{30%{transform:scale(1.22)}100%{transform:scale(1)}}
   .bottle{font-size:4.5rem;transition:transform .1s linear;filter:drop-shadow(0 0 18px rgba(255,45,120,.5))}
+  .bottle.spinning{filter:blur(1px) drop-shadow(0 0 18px rgba(255,45,120,.55))}
   .spin-status{text-align:center;color:var(--dim);font-size:.9rem;margin:8px 0 12px;min-height:1.2em}
 
   /* choice */
@@ -317,7 +325,11 @@
     </div>
 
     <div class="card">
-      <div class="bottle-stage"><div class="bottle" id="bottle">🍾</div></div>
+      <div class="bottle-stage">
+        <div class="seat" id="seat0"></div>
+        <div class="bottle-wrap" id="bottleWrap"><div class="bottle" id="bottle">🍾</div></div>
+        <div class="seat" id="seat1"></div>
+      </div>
       <div class="spin-status" id="spinStatus" data-i18n="spinHint">Set the heat, then spin the bottle</div>
       <button class="btn btn-pink" id="spinBtn" data-i18n="spin">🍾 Spin the Bottle</button>
       <div class="streaks" id="streaks"></div>
@@ -440,7 +452,8 @@ const I18N = {
     netFail:"Take a deep breath and try again.",
     skipConfirm:"{name} skips this step — that's a {p} penalty. Confirm?",
     refuseConfirm:"{name} refuses to perform the {type} — that's a {p} penalty. Confirm?",
-    reconnecting:"Reconnecting…"
+    reconnecting:"Reconnecting…",
+    doneAnswer:"Done 💜",
   },
   es: {
     rtl: false,
@@ -481,7 +494,8 @@ const I18N = {
     netFail:"Respira hondo y vuelve a intentarlo.",
     skipConfirm:"{name} salta este paso — es una penalización de {p}. ¿Confirmar?",
     refuseConfirm:"{name} se niega a hacer la {type} — es una penalización de {p}. ¿Confirmar?",
-    reconnecting:"Reconectando…"
+    reconnecting:"Reconectando…",
+    doneAnswer:"¡Listo! 💜",
   },
   fr: {
     rtl: false,
@@ -522,7 +536,8 @@ const I18N = {
     netFail:"Respirez un bon coup et réessayez.",
     skipConfirm:"{name} passe cette étape — c'est une pénalité de {p}. Confirmer ?",
     refuseConfirm:"{name} refuse de faire le {type} — c'est une pénalité de {p}. Confirmer ?",
-    reconnecting:"Reconnexion…"
+    reconnecting:"Reconnexion…",
+    doneAnswer:"Terminé 💜",
   },
   de: {
     rtl: false,
@@ -563,7 +578,8 @@ const I18N = {
     netFail:"Atme tief durch und versuch es noch einmal.",
     skipConfirm:"{name} überspringt diesen Schritt — das kostet {p} Strafe. Bestätigen?",
     refuseConfirm:"{name} verweigert die {type} — das kostet {p} Strafe. Bestätigen?",
-    reconnecting:"Verbinde erneut…"
+    reconnecting:"Verbinde erneut…",
+    doneAnswer:"Fertig 💜",
   },
   it: {
     rtl: false,
@@ -604,7 +620,8 @@ const I18N = {
     netFail:"Fai un respiro profondo e riprova.",
     skipConfirm:"{name} salta questo passo — è una penalità di {p}. Confermi?",
     refuseConfirm:"{name} rifiuta di fare la {type} — è una penalità di {p}. Confermi?",
-    reconnecting:"Riconnessione…"
+    reconnecting:"Riconnessione…",
+    doneAnswer:"Fatto 💜",
   },
   pt: {
     rtl: false,
@@ -639,13 +656,14 @@ const I18N = {
     oathMsg:"Juramento selado, {names}. A partir deste momento, cada palavra e cada desafio é real. O jogo ficou sério — gire quando estiver pronto.",
     skipMsg:"{name} pula. Isso é uma penalidade de cem dólares.", refuseMsg:"{name} recusa. Isso é uma penalidade de cem dólares.",
     banter:["Mmm, vocês estão indo tão bem…","A tensão *dói* agora, não?","Continue. Eu sinto crescer.","Vocês dois estão perigosamente perto da beira.","Devagar… ou não. Você decide, querido."],
-    forcedTruth:"⚡ 3 desafios seguidos — esta é uma VERDADE!", heatCapped:"Segura em {h}/10 — o fogo se conquista 🔥", loadLines:["Misturando os segredos…", "Lendo nas entrelinhas…", "Acendendo o pavio…", "Escolhendo algo delicioso…"],
+    forcedTruth:"⚡ 3 desafios seguidos — esta é uma VERDADE!", heatCapped:"Segura em {h}/10 — o fogo se conquista 🔥",
+    doneAnswer:"Pronto 💜", loadLines:["Misturando os segredos…", "Lendo nas entrelinhas…", "Acendendo o pavio…", "Escolhendo algo delicioso…"],
     roomWatching:"Sala {code} · jogando juntos", roomGone:"Essa sala acabou — vamos começar de novo.", resynced:"Reconectado ao jogo",
     spinSpinning:"🍾 girando…", craftTruth:"💋 Cassia está criando sua verdade…", craftDare:"💋 Cassia está criando seu desafio…",
     netFail:"Respire fundo e tente de novo.",
     skipConfirm:"{name} pula este passo — é uma penalidade de {p}. Confirmar?",
     refuseConfirm:"{name} recusa fazer o {type} — é uma penalidade de {p}. Confirmar?",
-    reconnecting:"Reconectando…"
+    reconnecting:"Reconectando…",
   },
   hi: {
     rtl: false,
@@ -686,7 +704,8 @@ const I18N = {
     netFail:"गहरी सांस लें और फिर कोशिश करें।",
     skipConfirm:"{name} यह चरण छोड़ता है — {p} जुर्माना है। पुष्टि करें?",
     refuseConfirm:"{name} {type} करने से मना करता है — {p} जुर्माना है। पुष्टि करें?",
-    reconnecting:"फिर से जुड़ रहे हैं…"
+    reconnecting:"फिर से जुड़ रहे हैं…",
+    doneAnswer:"पूरा हुआ 💜",
   },
   ja: {
     rtl: false,
@@ -727,7 +746,8 @@ const I18N = {
     netFail:"深呼吸して、もう一度試してください。",
     skipConfirm:"{name}がこのステップをスキップ — {p}の罰金です。よろしいですか？",
     refuseConfirm:"{name}が{type}を拒否 — {p}の罰金です。よろしいですか？",
-    reconnecting:"再接続中…"
+    reconnecting:"再接続中…",
+    doneAnswer:"完了 💜",
   },
   zh: {
     rtl: false,
@@ -768,7 +788,8 @@ const I18N = {
     netFail:"深呼吸，然后再试一次。",
     skipConfirm:"{name} 跳过此步骤——将罚款 {p}。确认吗？",
     refuseConfirm:"{name} 拒绝执行{type}——将罚款 {p}。确认吗？",
-    reconnecting:"重新连接中…"
+    reconnecting:"重新连接中…",
+    doneAnswer:"答完啦 💜",
   },
   ar: {
     rtl: true,
@@ -809,7 +830,8 @@ const I18N = {
     netFail:"خذ نفساً عميقاً وحاول مجدداً.",
     skipConfirm:"{name} يتخطى هذه الخطوة — غرامة {p}. هل تؤكدان؟",
     refuseConfirm:"{name} يرفض تنفيذ {type} — غرامة {p}. هل تؤكدان؟",
-    reconnecting:"جارٍ إعادة الاتصال…"
+    reconnecting:"جارٍ إعادة الاتصال…",
+    doneAnswer:"انتهيت 💜",
   },
 };
 
@@ -1045,6 +1067,7 @@ function renderPhase(){
   const el = $("#phasePill"); if(el) el.innerHTML = `🌫️ <b>${esc(p.name)}</b>`;
   if(el) el.title = p.desc;
   renderPhaseDots();
+  updateSeats();
   // heat glow
   const glow = state.heat / 10;
   document.documentElement.style.setProperty("--glow", glow.toFixed(2));
@@ -1397,26 +1420,32 @@ window.startLoading = startLoading;
 window.stopLoading = stopLoading;
 
 /* =========================================================================
-   Spin
+   Spin — physical, direction-alternating, velocity-synced sound
    ========================================================================= */
-const SPIN_MS = 2600;
-let spinTickTimers = [];
-function clearSpinTicks(){ spinTickTimers.forEach(clearTimeout); spinTickTimers = []; }
-// deterministic facing: player seat 0 → bottle tilts left (=-40°), seat 1 → right (=+40°)
+let spinDir = 1;                 // alternate direction every spin (real bottle feel)
+let landTimer = null;
+function updateSeats(){
+  [0,1].forEach(i => {
+    const el = $("#seat"+i); if(!el) return;
+    const p = state.players[i];
+    el.textContent = p ? p.name : "";
+    el.classList.remove("picked");
+  });
+}
+window.updateSeats = updateSeats;
+// facing: player seat 0 tilts the bottle left (−40°), seat 1 right (+40°)
 function spinFacing(idx){ return idx === 0 ? -40 : 40; }
 window.spinFacing = spinFacing;
 window.spinTargetAngle = function(idx){
-  const turns = 1440 + Math.floor(Math.random()*360);
-  return turns + spinFacing(idx);
+  // many turns in the alternating direction, then settle EXACTLY on facing
+  const raw = spinDir * (1440 + Math.floor(Math.random()*720));
+  return raw + (((spinFacing(idx) - raw) % 360) + 360) % 360;
 };
-function scheduleSpinTicks(){
-  // whoosh ticks that slow down as the bottle loses momentum
-  const steps = [[350,420,.09],[750,380,.08],[1150,340,.075],[1550,300,.07],[1950,260,.06],[2280,220,.05],[2480,190,.04]];
-  clearSpinTicks();
-  steps.forEach(([at, freq, vol]) => {
-    spinTickTimers.push(setTimeout(() => beep(freq, .05, "square", vol), at));
-  });
+function playTick(speed){        // speed ≈ deg since last tick; pitch+volume follow it
+  const v = Math.max(.12, Math.min(1, speed/26));
+  beep(240 + 480*v, .045, "square", .02 + .085*v);
 }
+function clearSpinTicks(){ /* ticks are frame-derived now — kept for API compat */ }
 function spin(){
   if(state.spinning || state.generating) return;
   state.spinning = true;
@@ -1428,31 +1457,47 @@ function spin(){
   $("#choiceCard").classList.add("hidden");
   $("#oathCard").classList.add("hidden");
   stopTimer();
-  renderStreaks(); renderLedger();
+  renderStreaks(); renderLedger(); updateSeats();
   $("#spinStatus").textContent = "🍾 " + (state.role==="guest" ? "…" : t("spinSpinning").replace("🍾 ",""));
-  SFX.spin(); scheduleSpinTicks();
-  const bottle = $("#bottle");
+  SFX.spin();
+  const reduced = typeof matchMedia === "function"
+    && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const bottle = $("#bottle"), wrap = $("#bottleWrap");
+  if(wrap) wrap.classList.remove("landpop");
+  if(!reduced) bottle.classList.add("spinning");
   const idx = Math.floor(Math.random()*state.players.length);
-  const target = state.players[idx];
-  state.target = target;
+  state.target = state.players[idx];
+  const totalMs = reduced ? 900 : (2350 + Math.random()*850);   // varied, never metronomic
   const finalA = window.spinTargetAngle(idx);
   const start = performance.now();
+  let prevDeg = null, tickAccum = 0;
+  function land(){
+    bottle.style.transform = `rotate(${((finalA % 360) + 360) % 360}deg)`;
+    bottle.classList.remove("spinning");
+    if(wrap){ wrap.classList.remove("landpop"); void wrap.offsetWidth; wrap.classList.add("landpop"); }
+    buzz(70); beep(150, .09, "sine", .14);
+    const seatEl = $("#seat" + idx);
+    if(seatEl) seatEl.classList.add("picked");
+    landTimer = setTimeout(() => {
+      state.spinning = false;
+      if(!state.generating) $("#spinBtn").disabled = false;
+      showChoice();
+    }, 420);                     // let the landing breathe before the reveal
+  }
   function frame(now){
-    const p = Math.min(1, (now-start)/SPIN_MS);
+    const p = Math.min(1, (now-start)/totalMs);
     const ease = 1 - Math.pow(1-p, 3);
-    // single subtle overshoot near the settle point, no per-frame jitter
-    const wobble = p > .7 ? Math.sin((p-.7)/.3 * Math.PI*2) * (1-p) * 14 : 0;
-    bottle.style.transform = `rotate(${ease*finalA + wobble}deg)`;
-    if(p < 1) requestAnimationFrame(frame);
-    else {
-      bottle.style.transform = `rotate(${finalA % 360}deg)`;
-      clearSpinTicks();
-      setTimeout(() => {
-        state.spinning = false;
-        if(!state.generating) $("#spinBtn").disabled = false;
-        showChoice();
-      }, 420); // let the landing breathe before the reveal
+    const deg = ease * finalA;
+    if(prevDeg !== null && !reduced){
+      const dDeg = deg - prevDeg;
+      if(dDeg > 0.4){
+        tickAccum += dDeg;
+        while(tickAccum >= 240){ tickAccum -= 240; playTick(dDeg); }   // slower = softer ticks
+      }
     }
+    prevDeg = deg;
+    bottle.style.transform = `rotate(${deg}deg)`;
+    if(p < 1) requestAnimationFrame(frame); else land();
   }
   requestAnimationFrame(frame);
 }
@@ -1597,15 +1642,33 @@ function startStep(idx, opts){
   $("#timerCard").classList.remove("hidden");
   $("#timerCard").classList.add("enter");
   $("#challengeCard").classList.add("hidden");
-  $("#nextBtn").disabled = true;
-  $("#pauseBtn").textContent = "⏸ " + t("pause");
-  timerTotal = step.seconds; timerRemaining = step.seconds; timerPaused = false;
-  timerEndAt = Date.now() + step.seconds * 1000;
-  updateTimerDisplay();
+  // TRUTHS ARE UNTIMED: no countdown pressure while someone answers out loud.
+  if(isTruth){
+    $("#timerBig").classList.add("hidden");
+    $("#timerBar").classList.add("hidden");
+    $("#pauseBtn").classList.add("hidden");
+    clearInterval(timerInt); timerInt = null; timerPaused = false;
+    timerTotal = 0; timerRemaining = 0;
+    $("#timerBar").style.width = "100%";
+    const nb = $("#nextBtn");
+    nb.disabled = false;                       // finish whenever they're ready
+    nb.textContent = "✓ " + t("doneAnswer");
+  } else {
+    $("#timerBig").classList.remove("hidden");
+    $("#timerBar").classList.remove("hidden");
+    $("#pauseBtn").classList.remove("hidden");
+    $("#pauseBtn").textContent = "⏸ " + t("pause");
+    const nb = $("#nextBtn");
+    nb.disabled = true;
+    nb.textContent = t("next");
+    timerTotal = step.seconds; timerRemaining = step.seconds; timerPaused = false;
+    timerEndAt = Date.now() + step.seconds * 1000;
+    updateTimerDisplay();
+    clearInterval(timerInt);
+    timerInt = setInterval(tick, 200);
+    if(state.voice) speak(`Step ${idx+1}. ${step.instruction}`);
+  }
   if(state.roomCode && !(opts && opts.mirror)) roomAction("set_step", {step: idx});
-  clearInterval(timerInt);
-  timerInt = setInterval(tick, 200);
-  if(state.voice && !isTruth) speak(`Step ${idx+1}. ${step.instruction}`);
 }
 function tick(){
   if(timerPaused) return;

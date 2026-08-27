@@ -320,5 +320,28 @@ check("switching language does not replay challenge TTS (silent re-render)",
   !sandbox.__netCalls.some(u => u.includes("/api/tts")));
 sandbox.window.setUiLang("en"); langSel.value = "en";
 
+/* ---- 17. v5.5: untimed truths + physical bottle ---- */
+console.log("\n[truth timer + bottle]");
+const mod360 = x => ((x % 360) + 360) % 360;
+check("spinFacing ±40", sandbox.spinFacing(0) === -40 && sandbox.spinFacing(1) === 40);
+check("target angle settles exactly on facing (idx0→320°, idx1→40°)",
+  mod360(sandbox.spinTargetAngle(0)) === 320 && mod360(sandbox.spinTargetAngle(1)) === 40);
+/* untimed truth */
+S.players = [{ name: "Ann" }, { name: "Ben" }];
+S.target = { name: "Ben" };
+sandbox.renderPhase();
+check("seat plates show player names", els["seat0"].textContent === "Ann" && els["seat1"].textContent === "Ben");
+S.challenge = { type: "truth", title: "T", steps: [{ instruction: "Q?", seconds: 45 }] };
+sandbox.startStep(0);
+check("truth hides the countdown clock", els["timerBig"].classList.contains("hidden"));
+check("truth enables finish immediately", els["nextBtn"].disabled === false);
+check("truth button reads Done", String(els["nextBtn"].textContent).includes("✓"));
+/* dares keep the timed steps */
+S.challenge = { type: "dare", title: "D", steps: [{ instruction: "one", seconds: 20 }, { instruction: "two", seconds: 30 }] };
+sandbox.startStep(1);
+check("dare keeps the timer visible", !els["timerBig"].classList.contains("hidden"));
+check("dare gates Next until time-up", els["nextBtn"].disabled === true);
+check("all langs ship doneAnswer", LANGS.every(l => typeof I18N[l].doneAnswer === "string" && I18N[l].doneAnswer.length > 1));
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
