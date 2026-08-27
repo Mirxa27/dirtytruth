@@ -213,6 +213,131 @@ TRUTH_BANK = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Deep-secrets seed bank — 100 researched confession questions (heat >= 7).
+# The LLM draws 3 random seeds per call and PERSONALIZES them for the couple
+# (names, secret preferences, phrasing) — never verbatim. The fallback bank
+# uses them directly. Tiers are 7/8/9/10 slices, roughly escalating.
+# ---------------------------------------------------------------------------
+DEEP_TIERS = {7: (0, 15), 8: (15, 40), 9: (40, 70), 10: (70, 100)}
+
+DEEP_TRUTH_SEEDS = [
+    "What’s the most explicit sexual fantasy you’ve never told me about?",
+    "Have you ever faked an orgasm with me, and if so, how many times?",
+    "What’s the dirtiest thought you’ve had about someone else while we were having sex?",
+    "What’s a sexual act you’ve secretly wanted to try but were too embarrassed to ask?",
+    "Have you ever kept a sex toy hidden from me, and what was it?",
+    "What’s the most taboo place you’ve ever wanted to have sex with me?",
+    "Have you ever looked up porn featuring people who look like me, and what category was it?",
+    "What’s a sexual insecurity you’ve never admitted out loud?",
+    "Have you ever imagined me with someone else during sex, and who was it?",
+    "What’s the most degrading thing you’ve secretly wanted me to say to you in bed?",
+    "Have you ever recorded yourself masturbating, and did you ever watch it back?",
+    "What’s a sexual boundary you’ve wanted to cross but were afraid I’d judge you for?",
+    "Have you ever had a wet dream or sex dream about someone I know?",
+    "What’s the dirtiest thing you’ve done when you thought no one was watching?",
+    "Have you ever used a photo or video of me to masturbate without telling me?",
+    "What’s a sexual preference you’ve hidden because you thought it was too weird?",
+    "Have you ever fantasized about being caught having sex, and where would it be?",
+    "What’s the most explicit lie you’ve told me about your sexual past?",
+    "Have you ever wanted me to dominate you completely, even if it meant losing control?",
+    "What’s a sexual act you’ve done with an ex that you secretly miss?",
+    "Have you ever kept a secret stash of lube, condoms, or toys I didn’t know about?",
+    "What’s the dirtiest thing you’ve typed into a search engine about sex?",
+    "Have you ever wanted me to roleplay as someone completely different in bed?",
+    "What’s a sexual fantasy you’ve had that involves power exchange or humiliation?",
+    "Have you ever imagined us having sex in public, and what was the scenario?",
+    "What’s the most explicit thing you’ve written in a private journal or notes app?",
+    "Have you ever wanted me to use a specific word or phrase during sex that you never asked for?",
+    "What’s a sexual experience from your past that you’ve never fully explained to me?",
+    "Have you ever fantasized about me being with someone else, and what turned you on about it?",
+    "What’s the dirtiest thing you’ve done to yourself when you were stressed or lonely?",
+    "Have you ever kept a secret about how many times you’ve masturbated in a week?",
+    "What’s a sexual act you’ve watched in porn but never had the courage to request?",
+    "Have you ever wanted me to blindfold you or restrain you without warning?",
+    "What’s the most explicit compliment you’ve wanted to give me but held back?",
+    "Have you ever fantasized about a threesome, and what roles did you imagine?",
+    "What’s a sexual secret you’ve kept because you thought it would change how I see you?",
+    "Have you ever used a specific song or playlist to get yourself off, and what was it?",
+    "What’s the dirtiest thing you’ve imagined doing to me while we were just talking?",
+    "Have you ever wanted me to take control of your pleasure completely, even if it meant you couldn’t speak?",
+    "What’s a sexual boundary you’ve pushed in your head but never acted on with me?",
+    "Have you ever kept a secret about how you really feel during certain positions?",
+    "What’s the most explicit thing you’ve wanted to whisper in my ear but didn’t?",
+    "Have you ever fantasized about us being watched, and who did you imagine watching?",
+    "What’s a sexual preference you’ve hidden because you thought it was too intense?",
+    "Have you ever used a mirror during sex or masturbation to watch yourself, and what did you notice?",
+    "What’s the dirtiest thing you’ve wanted me to do to you after an argument?",
+    "Have you ever kept a secret about how often you think about sex during the day?",
+    "What’s a sexual act you’ve wanted to try that involves temperature play or sensory deprivation?",
+    "Have you ever fantasized about me taking you in a completely non-sexual setting?",
+    "What’s the most explicit memory you’ve replayed in your head when alone?",
+    "Have you ever wanted me to use a specific prop or item during sex that you never mentioned?",
+    "What’s a sexual secret you’ve kept about how you really respond to certain touches?",
+    "Have you ever fantasized about us having sex in a place that’s technically off-limits?",
+    "What’s the dirtiest thing you’ve wanted to confess about your masturbation habits?",
+    "Have you ever kept a secret about how you feel when I take charge versus when you do?",
+    "What’s a sexual fantasy you’ve had that involves complete surrender or loss of control?",
+    "Have you ever wanted me to film us, even if just for private viewing?",
+    "What’s the most explicit thing you’ve imagined saying to me during foreplay?",
+    "Have you ever fantasized about a specific type of dirty talk that you’ve never requested?",
+    "What’s a sexual boundary you’ve wanted to test but were afraid of the aftermath?",
+    "Have you ever kept a secret about how you really feel when we’re interrupted during intimacy?",
+    "What’s the dirtiest thing you’ve wanted to do to me while I’m asleep or unaware?",
+    "Have you ever fantasized about us having sex in a vehicle, and what kind?",
+    "What’s a sexual preference you’ve hidden because you thought it was too unconventional?",
+    "Have you ever used a specific scent or perfume to trigger arousal when alone?",
+    "What’s the most explicit thing you’ve wanted to ask me to wear during sex?",
+    "Have you ever fantasized about me being completely silent while you take control?",
+    "What’s a sexual secret you’ve kept about how you really feel during certain times of the month?",
+    "Have you ever wanted me to use a specific grip, pace, or pressure that you never communicated?",
+    "What’s the dirtiest thing you’ve imagined doing in a hotel room or vacation spot?",
+    "Have you ever kept a secret about how you respond to being teased or denied?",
+    "What’s a sexual fantasy you’ve had that involves role reversal or unexpected dominance?",
+    "Have you ever fantasized about us having sex in a completely mundane location, like a grocery aisle?",
+    "What’s the most explicit thing you’ve wanted to confess about your porn preferences?",
+    "Have you ever kept a secret about how you really feel when I initiate versus when you do?",
+    "What’s a sexual boundary you’ve wanted to cross that involves light pain or intensity?",
+    "Have you ever fantasized about me using a specific word or command that you’ve never heard me say?",
+    "What’s the dirtiest thing you’ve wanted to do to yourself while thinking about me?",
+    "Have you ever kept a secret about how you really feel when we’re in a rush or have limited time?",
+    "What’s a sexual fantasy you’ve had that involves complete privacy but extreme exposure?",
+    "Have you ever wanted me to take photos or videos of you in compromising positions?",
+    "What’s the most explicit thing you’ve imagined whispering to me during a climax?",
+    "Have you ever fantasized about us having sex in a place with a high risk of getting caught?",
+    "What’s a sexual secret you’ve kept about how you really respond to certain sounds or moans?",
+    "Have you ever wanted me to use a specific type of restraint or binding that you never asked for?",
+    "What’s the dirtiest thing you’ve wanted to confess about your solo routines?",
+    "Have you ever fantasized about me being completely unresponsive while you take charge?",
+    "What’s a sexual preference you’ve hidden because you thought it was too intense for me?",
+    "Have you ever kept a secret about how you really feel when we’re exhausted but still intimate?",
+    "What’s the most explicit thing you’ve wanted to ask me to do after a long period of abstinence?",
+    "Have you ever fantasized about us having sex in a completely unexpected social setting?",
+    "What’s a sexual boundary you’ve wanted to test that involves sensory overload or deprivation?",
+    "Have you ever kept a secret about how you really respond to being praised or degraded in bed?",
+    "What’s the dirtiest thing you’ve wanted to confess about your hidden desires?",
+    "Have you ever fantasized about me using a specific toy or object that you’ve never mentioned?",
+    "What’s a sexual secret you’ve kept about how you really feel when we’re completely alone for days?",
+    "Have you ever wanted me to take complete control of your pleasure without any input from you?",
+    "What’s the most explicit thing you’ve imagined doing to me in a completely private, locked room?",
+    "Have you ever kept a secret about how you really respond to being teased to the edge repeatedly?",
+    "What’s the one dirty truth about your desires, past, or fantasies that you’ve been too afraid to say out loud until now?",
+]
+
+assert len(DEEP_TRUTH_SEEDS) == 100
+
+
+def deep_seeds_for_tier(tier):
+    lo, hi = DEEP_TIERS.get(tier, (0, 0))
+    return DEEP_TRUTH_SEEDS[lo:hi]
+
+
+def normalize_key(text):
+    """Lowercase, punctuation-free key for no-repeat matching."""
+    import re as _re
+    return _re.sub(r"[^\w]+", " ", str(text).lower(), flags=_re.UNICODE).strip()
+
+
 def tier_for_heat(heat):
     h = max(1, min(10, int(heat)))
     if h <= 2:
@@ -223,15 +348,31 @@ def tier_for_heat(heat):
         return 5
     if h <= 8:
         return 7
-    return 9
+    if h == 9:
+        return 9
+    return 10
 
 
-def truth_for_heat(heat, recent_titles):
-    """Pick a researched truth question for a heat level, avoiding repeats."""
+def truth_for_heat(heat, recent_titles, avoid=None):
+    """Pick a truth question for a heat level, avoiding ANY prior use.
+
+    `recent_titles` — titles shown this session (truths truncate to 40 chars).
+    `avoid` — normalized keys of every prompt ever served (seen-set).
+    Tiers 7+ additionally draw from the 100-seed deep bank.
+    """
     import random
     tier = tier_for_heat(heat)
     pool = list(TRUTH_BANK[tier])
-    fresh = [q for q in pool if q[:40] not in (recent_titles or [])]
+    if tier >= 7:
+        pool = pool + deep_seeds_for_tier(tier)
+    recent_raw = set(recent_titles or [])
+    blocked = {normalize_key(x)[:60] for x in recent_raw}
+    blocked |= {normalize_key(a)[:60] for a in (avoid or [])}
+    fresh = [q for q in pool
+             if q[:40] not in recent_raw              # legacy title-prefix match
+             and normalize_key(q)[:60] not in blocked]
+    if not fresh:
+        fresh = [q for q in pool if normalize_key(q)[:60] not in blocked]
     if not fresh:
         fresh = pool
     return random.choice(fresh)
@@ -359,18 +500,28 @@ FALLBACK_DARES = {
 }
 
 
-def fallback_challenge(chosen, heat, target, partner, recent_titles):
+def fallback_challenge(chosen, heat, target, partner, recent_titles, avoid=None):
     """Pick a real, complete challenge from the fallback pool.
 
-    Avoids repeating any title in recent_titles when possible.
-    Returns (title, steps) where steps is a list of {instruction, seconds}.
-    Truths are single-question challenges (one step, 45s to answer).
+    Avoids ANY item whose normalized key appears in recent_titles or avoid,
+    walking tiers outward. Returns (title, steps) where steps is a list of
+    {instruction, seconds}. Truths are single-question challenges (45s).
     """
     tier = tier_for_heat(heat)
+    blocked = {normalize_key(t)[:60] for t in (recent_titles or [])}
+    blocked |= {normalize_key(a)[:60] for a in (avoid or [])}
+
+    def blocked_out(text):
+        return normalize_key(text)[:60] in blocked
+
     if chosen == "truth":
-        # Use the researched dirty-secrets bank (same tiers as the LLM prompt).
-        # The localized "Answer out loud:" prefix is added by the frontend.
-        q = truth_for_heat(heat, recent_titles)
+        q = truth_for_heat(heat, recent_titles, avoid)
+        if blocked_out(q):
+            # last resort: scan the whole deep bank for anything never served
+            for cand in DEEP_TRUTH_SEEDS:
+                if not blocked_out(cand):
+                    q = cand
+                    break
         q = q.rstrip("?.!").strip()
         title = q[:40] + ("…" if len(q) > 40 else "")
         return title, [{"instruction": q, "seconds": 45}]
@@ -379,7 +530,7 @@ def fallback_challenge(chosen, heat, target, partner, recent_titles):
     candidates = _tier_candidates(tier)
     for t in candidates:
         for title, steps in pool.get(t, []):
-            if title in recent_titles:
+            if blocked_out(title):
                 continue
             out = [{"instruction": i, "seconds": max(5, min(180, int(s)))} for i, s in steps]
             if out:

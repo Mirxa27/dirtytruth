@@ -894,3 +894,64 @@ def test_chat_failure_reply_is_localized(client, monkeypatch):
     assert "Aquí estoy" in r_es["reply"]
     r_en = client.post("/api/chat", json={"message": "hi", "lang": "en"}).get_json()
     assert r_en["engine"] == "fallback"
+
+
+# ---------------------------------------------------------------------------
+# v5.6 — deep-secrets seeds, no-repeat engine, written answers, join links
+# ---------------------------------------------------------------------------
+def test_deep_seed_bank_shape():
+    assert len(game_logic.DEEP_TRUTH_SEEDS) == 100
+    assert len(set(game_logic.DEEP_TRUTH_SEEDS)) == 100          # no dupes
+    for t, (lo, hi) in game_logic.DEEP_TIERS.items():
+        assert len(game_logic.deep_seeds_for_tier(t)) == hi - lo
+
+
+def test_truth_tiers_draw_from_deep_seeds():
+    for _ in range(30):
+        q = game_logic.truth_for_heat(10, [])
+        assert isinstance(q, str) and q
+    tier10 = set(game_logic.deep_seeds_for_tier(10))
+    hits = sum(1 for _ in range(60) if game_logic.truth_for_heat(10, []) in tier10)
+    assert hits > 0    # deep seeds genuinely enter the high-heat pool
+
+
+def test_truth_avoid_list_blocks_used_questions():
+    tier = game_logic.tier_for_heat(10)
+    pool = list(game_logic.TRUTH_BANK[tier]) + game_logic.deep_seeds_for_tier(tier)
+    avoid = [game_logic.normalize_key(q) for q in pool[: len(pool) - 1]]
+    q = game_logic.truth_for_heat(10, [], avoid)
+    assert game_logic.normalize_key(q)[:60] not in {a[:60] for a in avoid}
+
+
+def test_generate_prompt_contains_seeds_and_avoid(client, monkeypatch):
+    captured = {}
+    def fake_llm(payload, retries=3):
+        captured["user"] = payload["messages"][1]["content"]
+        return '{"text":"A fresh scene","steps":[{"instruction":"Something new","seconds":30}]}'
+    monkeypatch.setattr(appmod, "call_llm", fake_llm)
+    body = {"chosen": "truth", "players": [{"name": "A"}, {"name": "B"}],
+            "avoid": ["previously served prompt number one"]}
+    r = client.post("/api/generate", json=body)
+    assert r.get_json()["engine"] == "cassia"
+    assert "INSPIRATION SEEDS" in captured["user"]
+    assert "previously served prompt" in captured["user"]
+
+
+def test_generate_rejects_verbatim_repeat(client, monkeypatch):
+    def fake_llm(payload, retries=3):
+        return '{"text":"The Slow Gaze","steps":[{"instruction":"Hold eye contact","seconds":30}]}'
+    monkeypatch.setattr(appmod, "call_llm", fake_llm)
+    body = {"chosen": "dare", "players": [{"name": "A"}, {"name": "B"}],
+            "avoid": [appmod.normalize_key("dare|The Slow Gaze|Hold eye contact")]}
+    r = client.post("/api/generate", json=body).get_json()
+    assert r["engine"] == "fallback"     # dup rejected -> offline pool (itself avoiding)
+
+
+def test_room_answer_and_seen_sync(client):
+    c = client.post("/api/room/create", json={"name": "Alex"}).get_json()["code"]
+    r = client.post("/api/room/action", json={"code": c, "action": "set_answer",
+                                              "player": "Sam", "text": "my answer 💜"})
+    assert r.get_json()["state"]["answers"]["Sam"] == "my answer 💜"
+    r2 = client.post("/api/room/action", json={"code": c, "action": "set_recent",
+                                               "recent": ["t1"], "seen": ["k1", "k2"]})
+    assert r2.get_json()["state"]["seen"] == ["k1", "k2"]

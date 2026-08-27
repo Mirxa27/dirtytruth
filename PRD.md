@@ -232,6 +232,15 @@ Setup (names, genders, heat, language, secret preferences)
   forcing rule with per-player 💜/🔥 counters; reworked bottle spin
   (deterministic ±40° facing, overshoot settle, decaying ticks, reveal beat);
   phase journey dots and capped-heat feedback.
+- **v5.5** — untimed truths (no countdown pressure; players advance when ready),
+  bottle spin pass two (alternating direction, velocity-synced ticks, landing
+  pop, seat nameplates), prefers-reduced-motion support.
+- **v5.5.1** — Cassia chat speaks the player's language (directive injected,
+  localized degraded-path replies), 30s bounded chat waits.
+- **v5.6** — 100-seed deep-confession bank (heat 7+) personalized by the AI,
+  zero-repeat engine (persistent seen-set + server avoid list + hard dedupe),
+  shareable join links (`/?join=CODE` with copy/share), written truth answers
+  synced to the partner screen, full question text visible while answering.
   ← **this release**
 
 ## 13. Success metrics

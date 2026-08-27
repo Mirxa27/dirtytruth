@@ -192,6 +192,13 @@
   /* confetti canvas */
   #confetti{position:fixed;inset:0;pointer-events:none;z-index:60}
 
+  textarea{width:100%;background:var(--card2);border:1px solid var(--line);color:var(--text);
+    border-radius:12px;padding:12px 14px;font-size:1rem;outline:none;resize:vertical;
+    min-height:84px;font-family:inherit;line-height:1.5}
+  textarea:focus{border-color:var(--purple)}
+  .linkrow{display:flex;gap:8px;margin-top:12px}
+  .linkrow input{flex:1;font-size:.85rem;opacity:.92;padding:10px 12px}
+
   /* entrance animation */
   .card.enter{animation:enter .4s ease}
   @keyframes enter{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
@@ -301,6 +308,11 @@
   <div class="card hidden" id="roomWaitCard">
     <div style="text-align:center;font-size:.85rem;color:var(--dim)" data-i18n="shareCode">Share this code with your partner</div>
     <div class="room-code" id="roomCodeDisplay">----</div>
+    <div class="linkrow">
+      <input type="text" id="joinLink" readonly>
+      <button class="btn btn-purple" id="copyLinkBtn" style="width:auto;padding:0 16px;font-size:.85rem" data-i18n="copyLink">Copy link</button>
+    </div>
+    <button class="btn btn-ghost hidden" id="shareLinkBtn" style="margin-top:8px" data-i18n="shareLink">📤 <span data-i18n="shareLink">Share link</span></button>
     <div class="room-status"><span class="dot" id="roomDot"></span><span id="roomStatusText" data-i18n="waiting">Waiting for your partner to join…</span></div>
     <div style="height:12px"></div>
     <button class="btn btn-ghost" id="cancelRoomBtn" data-i18n="cancel">Cancel</button>
@@ -374,6 +386,11 @@
     <!-- TIMER -->
     <div class="card hidden" id="timerCard">
       <div class="step-hint" id="stepHint"></div>
+      <div class="q-text" id="stepText" style="margin-bottom:12px"></div>
+      <div id="answerWrap" class="hidden" style="margin-top:4px">
+        <textarea id="answerBox" maxlength="600" rows="3" data-i18n-ph="answerPh"></textarea>
+        <button class="btn btn-purple" id="sendAnswerBtn" style="margin-top:8px" data-i18n="sendAnswer">Send answer 💜</button>
+      </div>
       <div class="timer-big" id="timerBig">0:00</div>
       <div class="timer-bar"><div id="timerBar"></div></div>
       <div class="row">
@@ -454,6 +471,7 @@ const I18N = {
     refuseConfirm:"{name} refuses to perform the {type} — that's a {p} penalty. Confirm?",
     reconnecting:"Reconnecting…",
     doneAnswer:"Done 💜",
+    joinLinkTitle:"Send this link to your partner", copyLink:"Copy link", copied:"Link copied ✓", shareLink:"Share link", answerPh:"Write your answer…", sendAnswer:"Send answer 💜", answerSent:"Answer sent 💜",
   },
   es: {
     rtl: false,
@@ -496,6 +514,7 @@ const I18N = {
     refuseConfirm:"{name} se niega a hacer la {type} — es una penalización de {p}. ¿Confirmar?",
     reconnecting:"Reconectando…",
     doneAnswer:"¡Listo! 💜",
+    joinLinkTitle:"Envía este enlace a tu pareja", copyLink:"Copiar enlace", copied:"Enlace copiado ✓", shareLink:"Compartir enlace", answerPh:"Escribe tu respuesta…", sendAnswer:"Enviar respuesta 💜", answerSent:"Respuesta enviada 💜",
   },
   fr: {
     rtl: false,
@@ -538,6 +557,7 @@ const I18N = {
     refuseConfirm:"{name} refuse de faire le {type} — c'est une pénalité de {p}. Confirmer ?",
     reconnecting:"Reconnexion…",
     doneAnswer:"Terminé 💜",
+    joinLinkTitle:"Envoyez ce lien à votre partenaire", copyLink:"Copier le lien", copied:"Lien copié ✓", shareLink:"Partager le lien", answerPh:"Écris ta réponse…", sendAnswer:"Envoyer la réponse 💜", answerSent:"Réponse envoyée 💜",
   },
   de: {
     rtl: false,
@@ -580,6 +600,7 @@ const I18N = {
     refuseConfirm:"{name} verweigert die {type} — das kostet {p} Strafe. Bestätigen?",
     reconnecting:"Verbinde erneut…",
     doneAnswer:"Fertig 💜",
+    joinLinkTitle:"Schick diesen Link deinem Partner", copyLink:"Link kopieren", copied:"Link kopiert ✓", shareLink:"Link teilen", answerPh:"Schreib deine Antwort…", sendAnswer:"Antwort senden 💜", answerSent:"Antwort gesendet 💜",
   },
   it: {
     rtl: false,
@@ -622,6 +643,7 @@ const I18N = {
     refuseConfirm:"{name} rifiuta di fare la {type} — è una penalità di {p}. Confermi?",
     reconnecting:"Riconnessione…",
     doneAnswer:"Fatto 💜",
+    joinLinkTitle:"Invia questo link al tuo partner", copyLink:"Copia link", copied:"Link copiato ✓", shareLink:"Condividi link", answerPh:"Scrivi la tua risposta…", sendAnswer:"Invia risposta 💜", answerSent:"Risposta inviata 💜",
   },
   pt: {
     rtl: false,
@@ -657,7 +679,8 @@ const I18N = {
     skipMsg:"{name} pula. Isso é uma penalidade de cem dólares.", refuseMsg:"{name} recusa. Isso é uma penalidade de cem dólares.",
     banter:["Mmm, vocês estão indo tão bem…","A tensão *dói* agora, não?","Continue. Eu sinto crescer.","Vocês dois estão perigosamente perto da beira.","Devagar… ou não. Você decide, querido."],
     forcedTruth:"⚡ 3 desafios seguidos — esta é uma VERDADE!", heatCapped:"Segura em {h}/10 — o fogo se conquista 🔥",
-    doneAnswer:"Pronto 💜", loadLines:["Misturando os segredos…", "Lendo nas entrelinhas…", "Acendendo o pavio…", "Escolhendo algo delicioso…"],
+    doneAnswer:"Pronto 💜",
+    joinLinkTitle:"Envie este link ao seu parceiro", copyLink:"Copiar link", copied:"Link copiado ✓", shareLink:"Compartilhar link", answerPh:"Escreva sua resposta…", sendAnswer:"Enviar resposta 💜", answerSent:"Resposta enviada 💜", loadLines:["Misturando os segredos…", "Lendo nas entrelinhas…", "Acendendo o pavio…", "Escolhendo algo delicioso…"],
     roomWatching:"Sala {code} · jogando juntos", roomGone:"Essa sala acabou — vamos começar de novo.", resynced:"Reconectado ao jogo",
     spinSpinning:"🍾 girando…", craftTruth:"💋 Cassia está criando sua verdade…", craftDare:"💋 Cassia está criando seu desafio…",
     netFail:"Respire fundo e tente de novo.",
@@ -706,6 +729,7 @@ const I18N = {
     refuseConfirm:"{name} {type} करने से मना करता है — {p} जुर्माना है। पुष्टि करें?",
     reconnecting:"फिर से जुड़ रहे हैं…",
     doneAnswer:"पूरा हुआ 💜",
+    joinLinkTitle:"यह लिंक अपने साथी को भेजें", copyLink:"लिंक कॉपी करें", copied:"लिंक कॉपी हो गया ✓", shareLink:"लिंक साझा करें", answerPh:"अपना जवाब लिखें…", sendAnswer:"जवाब भेजें 💜", answerSent:"जवाब भेजा गया 💜",
   },
   ja: {
     rtl: false,
@@ -748,6 +772,7 @@ const I18N = {
     refuseConfirm:"{name}が{type}を拒否 — {p}の罰金です。よろしいですか？",
     reconnecting:"再接続中…",
     doneAnswer:"完了 💜",
+    joinLinkTitle:"このリンクをパートナーに送る", copyLink:"リンクをコピー", copied:"リンクをコピーしました ✓", shareLink:"リンクを共有", answerPh:"答えを書いて…", sendAnswer:"答えを送る 💜", answerSent:"答えを送信しました 💜",
   },
   zh: {
     rtl: false,
@@ -790,6 +815,7 @@ const I18N = {
     refuseConfirm:"{name} 拒绝执行{type}——将罚款 {p}。确认吗？",
     reconnecting:"重新连接中…",
     doneAnswer:"答完啦 💜",
+    joinLinkTitle:"把这个链接发给你的伴侣", copyLink:"复制链接", copied:"链接已复制 ✓", shareLink:"分享链接", answerPh:"写下你的回答…", sendAnswer:"发送回答 💜", answerSent:"回答已发送 💜",
   },
   ar: {
     rtl: true,
@@ -832,6 +858,7 @@ const I18N = {
     refuseConfirm:"{name} يرفض تنفيذ {type} — غرامة {p}. هل تؤكدان؟",
     reconnecting:"جارٍ إعادة الاتصال…",
     doneAnswer:"انتهيت 💜",
+    joinLinkTitle:"أرسل هذا الرابط لشريكك", copyLink:"انسخ الرابط", copied:"تم نسخ الرابط ✓", shareLink:"شارك الرابط", answerPh:"اكتب إجابتك…", sendAnswer:"أرسل الإجابة 💜", answerSent:"تم إرسال الإجابة 💜",
   },
 };
 
@@ -891,6 +918,8 @@ const state = {
   generating: false,
   truthStreak: {},
   typeStreak: {},
+  seen: [],
+  answers: {},
   forcedDare: false,
   oathSworn: false,
   ledger: {},
@@ -1153,6 +1182,7 @@ function saveState(){
       voice: state.voice, autoEscalate: state.autoEscalate,
       oathSworn: state.oathSworn, ledger: state.ledger, prefs: state.prefs,
       mode: state.mode, roomCode: state.roomCode, role: state.role,
+      seen: state.seen, answers: state.answers,
     }));
   }catch(e){}
 }
@@ -1168,6 +1198,8 @@ function loadState(){
     state.mode = s.mode || "solo";
     state.roomCode = s.roomCode || null;
     state.role = s.role || null;
+    state.seen = Array.isArray(s.seen) ? s.seen.slice(-80) : [];
+    state.answers = (s.answers && typeof s.answers === "object") ? s.answers : {};
     return true;
   }catch(e){ return false; }
 }
@@ -1244,6 +1276,50 @@ const MIRROR = {
   observedRound: 1,  // round last seen on the server
   oathShown: false,  // oath already presented from the feed
 };
+const ANSWERS = { seen: {} };   // answers already rendered locally (echo guard)
+window.__ANSWERS = ANSWERS;
+function challengeKey(d){
+  try{
+    return ((d.type||"") + "|" + (d.title||"") + "|" +
+            ((d.steps && d.steps[0] && d.steps[0].instruction) || ""))
+      .toLowerCase().replace(/[^\w]+/g, " ").trim().slice(0, 160);
+  }catch(e){ return ""; }
+}
+window.challengeKey = challengeKey;
+function rememberChallenge(d){
+  const k = challengeKey(d);
+  if(k && state.seen.indexOf(k) < 0){
+    state.seen.push(k);
+    if(state.seen.length > 80) state.seen = state.seen.slice(-80);
+  }
+  return k;
+}
+window.rememberChallenge = rememberChallenge;
+function parseJoinParam(search){
+  try{
+    const m = String(search || "").match(/[?&]join=([A-Za-z0-9]{1,8})/);
+    return m ? m[1].toUpperCase().slice(0, 4) : null;
+  }catch(e){ return null; }
+}
+window.parseJoinParam = parseJoinParam;
+function roomJoinLink(code){
+  return location.origin + location.pathname + "?join=" + code;
+}
+window.roomJoinLink = roomJoinLink;
+function sendAnswer(){
+  const box = $("#answerBox");
+  const txt = ((box && box.value) || "").trim().slice(0, 600);
+  if(!txt || !state.target) return;
+  const name = state.target.name;
+  state.answers[name] = txt;
+  ANSWERS.seen[name] = txt;        // never echo our own bubble back
+  saveState();
+  if(state.roomCode) roomAction("set_answer", {player: name, text: txt});
+  addChat("cassia", "💜 " + name + ": " + txt);
+  box.value = "";
+  toast(t("answerSent")); SFX.chime(); buzz(40);
+}
+window.sendAnswer = sendAnswer;
 window.__MIRROR = MIRROR;
 function renderRoundDone(){
   $("#roundNum").textContent = state.round;
@@ -1268,6 +1344,17 @@ function applyRemoteState(s){
   state.truthStreak = s.truthStreak || {};
   state.typeStreak = s.typeStreak || {};
   state.ledger = s.ledger || {};
+  if(Array.isArray(s.seen) && s.seen.length > (state.seen || []).length) state.seen = s.seen;
+  state.answers = s.answers || {};
+  // written answers arrive from the partner -> render as bubbles (echo-guarded)
+  Object.keys(state.answers).forEach(nm => {
+    const tx = state.answers[nm];
+    if(tx && ANSWERS.seen[nm] !== tx){
+      ANSWERS.seen[nm] = tx;
+      addChat("cassia", "💜 " + nm + ": " + tx);
+      buzz(40);
+    }
+  });
   state.recent = s.recent || [];
   state.prefs = s.prefs || {};
   if(s.oathSworn && !state.oathSworn){ state.oathSworn = true; saveState(); }
@@ -1368,6 +1455,8 @@ $("#startBtn").addEventListener("click", async () => {
       state.roomCode = d.code; state.role = "host"; state.roomVersion = 0;
       saveState();
       $("#roomCodeDisplay").textContent = d.code;
+      try{ $("#joinLink").value = roomJoinLink(d.code); }catch(e){}
+      if(typeof navigator.share === "function") $("#shareLinkBtn").classList.remove("hidden");
       $("#setupCard").classList.add("hidden");
       $("#roomWaitCard").classList.remove("hidden");
       startRoomPolling();
@@ -1403,6 +1492,30 @@ $("#cancelRoomBtn").addEventListener("click", () => {
   state.roomCode = null; state.role = null;
   $("#roomWaitCard").classList.add("hidden");
   $("#setupCard").classList.remove("hidden");
+});
+$("#sendAnswerBtn").addEventListener("click", sendAnswer);
+$("#answerBox").addEventListener("keydown", e => {
+  if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); sendAnswer(); }
+});
+$("#copyLinkBtn").addEventListener("click", async () => {
+  const link = $("#joinLink").value; if(!link) return;
+  try{
+    await navigator.clipboard.writeText(link);
+    toast(t("copied"));
+  }catch(e){
+    try{
+      const el = $("#joinLink");
+      el.removeAttribute("readonly"); el.select();
+      document.execCommand("copy");
+      el.setAttribute("readonly", "");
+      toast(t("copied"));
+    }catch(e2){ toast(link); }
+  }
+});
+if(typeof navigator.share === "function") $("#shareLinkBtn").classList.remove("hidden");
+$("#shareLinkBtn").addEventListener("click", () => {
+  const link = $("#joinLink").value; if(!link) return;
+  navigator.share({title: t("appTitle"), url: link}).catch(()=>{});
 });
 
 /* =========================================================================
@@ -1579,6 +1692,7 @@ async function generateChallenge(chosen){
   const body = {
     players: state.players, chosen, target: state.target.name,
     heat: state.heat, round: state.round, recent: state.recent,
+    avoid: state.seen,
     lang: uiLang, prefs: state.prefs,
   };
   let d;
@@ -1594,11 +1708,15 @@ async function generateChallenge(chosen){
       if(state.roomCode) roomAction("set_heat", {heat: d.heat});
       toast(t("heatCapped", {h: d.heat}));
     }
+    rememberChallenge(d);   // never serve this combination again
     state.challenge = d;
     state.stepIdx = 0;
     state.recent = [d.title, ...state.recent].slice(0, 8);
     saveState();
-    if(state.roomCode) roomAction("set_challenge", {challenge: d});
+    if(state.roomCode){
+      roomAction("set_challenge", {challenge: d});
+      roomAction("set_recent", {recent: state.recent, seen: state.seen});
+    }
     renderChallenge();
     return d;
   } finally {
@@ -1644,12 +1762,15 @@ function startStep(idx, opts){
   state.stepIdx = idx;
   const step = c.steps[idx];
   const isTruth = c.type === "truth";
+  const questionText = isTruth
+    ? (t("answerOutLoud") + " " + step.instruction.replace(/^Answer out loud:\s*/i, "").replace(/[?.!]+$/, "") + "?")
+    : step.instruction;
   $("#stepHint").textContent = isTruth
     ? `💜 ${t("truth")} — ${state.target.name}, ${t("answerOutLoud")}`
     : `${t("step")} ${idx+1} ${t("of")} ${c.steps.length} — ${state.target.name}`;
-  $("#qText").textContent = isTruth
-    ? (t("answerOutLoud") + " " + step.instruction.replace(/^Answer out loud:\s*/i, "").replace(/[?.!]+$/, "") + "?")
-    : step.instruction;
+  // question must be visible WHILE answering (timer card) and in the overview
+  $("#qText").textContent = questionText;
+  $("#stepText").textContent = questionText;
   $("#timerCard").classList.remove("hidden");
   $("#timerCard").classList.add("enter");
   $("#challengeCard").classList.add("hidden");
@@ -1658,6 +1779,8 @@ function startStep(idx, opts){
     $("#timerBig").classList.add("hidden");
     $("#timerBar").classList.add("hidden");
     $("#pauseBtn").classList.add("hidden");
+    $("#answerWrap").classList.remove("hidden");
+    $("#answerBox").value = "";
     clearInterval(timerInt); timerInt = null; timerPaused = false;
     timerTotal = 0; timerRemaining = 0;
     $("#timerBar").style.width = "100%";
@@ -1668,6 +1791,7 @@ function startStep(idx, opts){
     $("#timerBig").classList.remove("hidden");
     $("#timerBar").classList.remove("hidden");
     $("#pauseBtn").classList.remove("hidden");
+    $("#answerWrap").classList.add("hidden");
     $("#pauseBtn").textContent = "⏸ " + t("pause");
     const nb = $("#nextBtn");
     nb.disabled = true;
@@ -1842,6 +1966,8 @@ $("#newGameBtn").addEventListener("click", () => {
   state.oathSworn = false; state.ledger = {}; state.prefs = {};
   state.roomCode = null; state.role = null; state.guestJoined = false;
   MIRROR.renderedSig = ""; MIRROR.appliedStep = -1; MIRROR.oathShown = false; MIRROR.observedRound = 1;
+  state.seen = []; state.answers = {};
+  for(const k of Object.keys(ANSWERS.seen)) delete ANSWERS.seen[k];
   stopRoomPolling(); stopTimer(); releaseWakeLock();
   localStorage.removeItem(SAVE_KEY);
   $("#gameUI").classList.add("hidden");
@@ -2029,6 +2155,22 @@ async function resumeRoomSession(){
     return; // without a code there is nothing server-side to resume
   }
   await enterGameUI(null);
+})();
+/* shareable join link: dirtytruth.vercel.app/?join=CODE pre-fills the join box */
+(function readJoinLink(){
+  const code = parseJoinParam(typeof location !== "undefined" ? location.search : "");
+  if(!code) return;
+  if(state.roomCode) return;                 // already in a game
+  const setup = $("#setupCard");
+  if(!setup || setup.classList.contains("hidden")) return;
+  document.querySelectorAll("#modeSel button").forEach(b => {
+    b.classList.toggle("sel", b.dataset.mode === "room");
+  });
+  $("#roomHost").classList.add("hidden");
+  $("#roomJoin").classList.remove("hidden");
+  $("#joinCode").value = code;
+  try{ history.replaceState(null, "", location.pathname); }catch(e){}
+  toast(t("joinLinkTitle"));
 })();
 </script>
 </body>

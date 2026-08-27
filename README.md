@@ -24,7 +24,14 @@ A private, mobile-first slow-burn truth-or-dare game for couples, powered by the
   automatic Kokoro fallback; native-quality MSA from origin box and Vercel alike.
 - **Dirty-secrets truth engine** — researched, escalating truth questions that
   uncover each partner's deepest secrets and desires (patterns mined from real
-  couple question banks: wafflejournal, lovifycouple, stephmorris, paired, forplay).
+  couple question banks: wafflejournal, lovifycouple, stephmorris, paired, forplay),
+  plus a **100-seed deep-confession bank** for heat 7+. The AI draws 3 random
+  seeds per call and personalizes them for the couple (names, secret preferences,
+  phrasing) — never verbatim.
+- **Zero repeats** — a persistent seen-set (per session, synced across devices)
+  plus a server-side avoid list and hard dedupe check: no question or dare is
+  ever served twice, and near-duplicate LLM output is rejected into the
+  offline pool, which avoids the same set.
 - **Mystery pacing** — the game moves through poetic phases
   (*First Glance → Warming Up → The Oath → Unveiling → No Secrets Left*).
   Players never know where it's going; the heat number is hidden behind the phase name.
@@ -34,9 +41,14 @@ A private, mobile-first slow-burn truth-or-dare game for couples, powered by the
 - **10-language i18n** — English, Spanish, French, German, Italian, Portuguese,
   Hindi, Japanese, Chinese, Arabic. UI, LLM-generated content (with a dedicated
   translation pass), and TTS voices all switch to the chosen language. Arabic is RTL.
-- **Multi-device rooms** — host creates a room, partner joins with a 4-letter code
-  on their own device. Server-side SQLite room store; the partner's screen mirrors
-  the challenge, timer, phase, and ledger via polling.
+- **Multi-device rooms** — host creates a room and shares a **real join link**
+  (`…/?join=CODE`, one-tap copy / native share sheet); the partner opens it on
+  their phone, enters just their name, and they're in. Server-side SQLite room
+  store; the partner's screen mirrors the challenge, timer, phase, and ledger
+  via polling.
+- **Written truth answers** — truths ship with an answer box: type your answer
+  (Enter to send) and it appears on your partner's screen as a bubble in the
+  Cassia chat feed. No repeats, no lost confessions.
 - **True two-way sync (v5.2)** — the partner's screen mirrors each timed step and
   its countdown live (PRD §4 timer promise), guest-recorded penalties land on the
   host's screen on the next poll, the oath appears mirrored without echo loops,

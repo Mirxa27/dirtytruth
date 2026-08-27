@@ -21,7 +21,10 @@ from game_logic import (
     record_penalty,
     penalty_summary,
     heat_ceiling_for_round,
+    DEEP_TRUTH_SEEDS,
+    normalize_key,
 )
+import random
 from languages import LANGUAGES, get_lang, language_directive, tts_voice
 import rooms
 
@@ -474,12 +477,34 @@ def generate():
     # slow-burn guardrail: pre-Oath rounds can't outrun their phase
     eff_heat = min(heat, heat_ceiling_for_round(round_no))
     recent = [str(q)[:200] for q in (data.get("recent") or []) if isinstance(q, (str, int, float))][-8:]
+    avoid = [normalize_key(a)[:160] for a in (data.get("avoid") or []) if isinstance(a, (str, int, float))][-80:]
+    avoid_set = set(avoid)
 
     players_desc = ", ".join(
         f"{p.get('name', 'Player')} ({p.get('gender', 'partner')})" for p in players
     )
     partner = next((p for p in players if p.get("name") != target), None)
     partner_name = partner.get("name", "your partner") if partner else "your partner"
+
+    # inspiration seeds: for truths, hand the LLM 3 random deep-secrets seeds
+    # to PERSONALIZE (names, preferences, phrasing) — never verbatim
+    seeds_block = ""
+    if chosen == "truth":
+        try:
+            seeds = random.sample(DEEP_TRUTH_SEEDS, 3)
+        except ValueError:
+            seeds = []
+        seeds_block = (
+            "INSPIRATION SEEDS — reimagine ONE of these for THIS exact couple "
+            "(use their names, weave their secret preferences, match the heat; "
+            "NEVER copy a seed verbatim):\n"
+            + "".join(f"- {s}\n" for s in seeds)
+        )
+    avoid_block = (
+        "ALREADY SERVED — your output must be completely different from every "
+        f"one of these (no repeats, no light rephrasing): {json.dumps(avoid)}\n"
+        if avoid else ""
+    )
 
     system = language_directive(lang["code"]) + (TRUTH_PROMPT if chosen == "truth" else DARE_PROMPT)
     phase = phase_for_round(round_no)
@@ -497,6 +522,8 @@ def generate():
         f"Game phase: {phase['name']} — {phase['desc']}\n"
         f"Game round: {round_no} (early rounds = build tension slowly)\n"
         f"Recent challenges (do NOT repeat or rephrase these): {json.dumps(recent) if recent else 'none — this is the first challenge'}\n"
+        + seeds_block
+        + avoid_block
         + (prefs_block + "\n" if prefs_block else "")
         + lang_reminder
         + f"Generate the {chosen} for {target} now. Strict JSON only."
@@ -519,14 +546,19 @@ def generate():
             validated = validate_challenge(chosen, title, steps)
             if validated:
                 vtitle, vsteps = validated
+                # hard dedupe: reject anything that echoes an already-served prompt
+                dup_key = normalize_key(chosen + " " + vtitle + " " +
+                                        (vsteps[0]["instruction"] if vsteps else ""))[:160]
+                if avoid_set and any(dup_key[:60] == a[:60] or a[:60] in dup_key for a in avoid_set):
+                    raise RuntimeError("duplicate of an already-served prompt")
                 if lang["code"] != "en":
                     vtitle, vsteps = _translate_challenge(vtitle, vsteps, lang["code"])
                 return jsonify({"type": chosen, "title": vtitle, "steps": vsteps, "heat": eff_heat, "engine": "cassia", "phase": phase["name"]})
         # LLM returned nothing usable -> fall through to the real fallback
     except Exception:
         pass
-    # Real, complete fallback content — never a stub
-    title, steps = fallback_challenge(chosen, heat, target, partner_name, recent)
+    # Real, complete fallback content — never a stub (also avoids repeats)
+    title, steps = fallback_challenge(chosen, heat, target, partner_name, recent, avoid)
     if lang["code"] != "en":
         title, steps = _translate_challenge(title, steps, lang["code"])
     return jsonify({"type": chosen, "title": title, "steps": steps, "heat": eff_heat, "engine": "fallback", "phase": phase["name"]})
@@ -816,6 +848,13 @@ def room_action():
             s["oathSworn"] = bool(data.get("sworn", True))
         elif action == "set_recent":
             s["recent"] = [str(q)[:200] for q in (data.get("recent") or []) if isinstance(q, (str, int, float))][-8:]
+            seen = [str(q)[:160] for q in (data.get("seen") or []) if isinstance(q, (str, int, float))]
+            s["seen"] = seen[-80:]
+        elif action == "set_answer":
+            player = str(data.get("player", ""))[:30].strip() or "Player"
+            text = str(data.get("text", ""))[:600].strip()
+            if text:
+                s.setdefault("answers", {})[player] = text
         elif action == "set_prefs":
             prefs = data.get("prefs")
             if isinstance(prefs, dict):

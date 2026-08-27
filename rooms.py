@@ -72,6 +72,8 @@ def _new_state(host_name, host_gender, lang):
         "ledger": {},
         "oathSworn": False,
         "recent": [],
+        "seen": [],
+        "answers": {},
         "status": "setup",  # setup | playing | oath | done
         "prefs": {},
     }

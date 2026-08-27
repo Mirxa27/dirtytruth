@@ -78,6 +78,7 @@ const sandbox = {
 };
 sandbox.window = sandbox;
 sandbox.globalThis = sandbox;
+sandbox.location = { origin: "https://x.test", pathname: "/", search: "" };
 sandbox.__netCalls = [];
 vm.createContext(sandbox);
 
@@ -247,8 +248,8 @@ check("index.html links manifest", html.includes('rel="manifest"'));
 
 /* ---- 15. room mirror (v5.2): guests see challenges, steps, round ends ---- */
 console.log("\n[room mirror]");
-sandbox.fetch = async (url) => {
-  sandbox.__netCalls.push(String(url));
+sandbox.fetch = async (url, init) => {
+  sandbox.__netCalls.push(String(url) + " " + ((init && init.body) || ""));
   return { ok: true, json: async () => ({}), blob: async () => new Blob() };
 };
 S.role = "guest"; S.roomCode = "KISS";
@@ -342,6 +343,34 @@ sandbox.startStep(1);
 check("dare keeps the timer visible", !els["timerBig"].classList.contains("hidden"));
 check("dare gates Next until time-up", els["nextBtn"].disabled === true);
 check("all langs ship doneAnswer", LANGS.every(l => typeof I18N[l].doneAnswer === "string" && I18N[l].doneAnswer.length > 1));
+
+
+/* ---- 18. v5.6: join links, written answers, no-repeat memory ---- */
+console.log("\n[join links + answers + no-repeat]");
+check("parseJoinParam extracts + uppercases", sandbox.parseJoinParam("?join=kis7") === "KIS7");
+check("parseJoinParam handles extra params", sandbox.parseJoinParam("/?x=1&join=ABCD&y=2") === "ABCD");
+check("parseJoinParam caps at 4 chars", sandbox.parseJoinParam("?join=TOOLONG") === "TOOL");
+check("parseJoinParam rejects garbage", sandbox.parseJoinParam("?foo=bar") === null);
+check("roomJoinLink builds shareable URL", sandbox.roomJoinLink("KISS") === "https://x.test/?join=KISS");
+const k1 = sandbox.challengeKey({ type: "truth", title: "T!", steps: [{ instruction: "Q?" }] });
+check("challengeKey normalizes", k1 === "truth t q");
+S.seen = [];
+sandbox.rememberChallenge({ type: "truth", title: "T!", steps: [{ instruction: "Q?" }] });
+sandbox.rememberChallenge({ type: "truth", title: "T", steps: [{ instruction: "Q!" }] });
+check("same challenge remembered once", S.seen.length === 1 && S.seen[0] === "truth t q");
+S.players = [{ name: "Ann" }, { name: "Ben" }];
+S.target = { name: "Ben" };
+S.roomCode = "KISS"; S.role = "host";
+sandbox.__netCalls.length = 0;
+els["answerBox"].value = "  my confession  ";
+sandbox.sendAnswer();
+check("sendAnswer stores trimmed text", S.answers.Ben === "my confession");
+check("own answer echo-guarded", sandbox.__ANSWERS.seen.Ben === "my confession");
+check("answer broadcast to the room", sandbox.__netCalls.some(u => u.includes("set_answer")));
+S.role = "host";
+sandbox.applyRemoteState(feedState({ answers: { Ann: "their note" } }));
+check("partner answer syncs into state", S.answers.Ann === "their note");
+check("partner answer marked seen (no loop)", sandbox.__ANSWERS.seen.Ann === "their note");
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

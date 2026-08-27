@@ -29,8 +29,8 @@ def test_tier_clamps_low():
     assert tier_for_heat(-5) == 1
 
 def test_tier_clamps_high():
-    assert tier_for_heat(11) == 9
-    assert tier_for_heat(99) == 9
+    assert tier_for_heat(11) == 10
+    assert tier_for_heat(99) == 10
 
 def test_tier_mapping():
     assert tier_for_heat(1) == 1
@@ -42,7 +42,7 @@ def test_tier_mapping():
     assert tier_for_heat(7) == 7
     assert tier_for_heat(8) == 7
     assert tier_for_heat(9) == 9
-    assert tier_for_heat(10) == 9
+    assert tier_for_heat(10) == 10
 
 
 # ---------------------------------------------------------------------------
