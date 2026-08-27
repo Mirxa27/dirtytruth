@@ -68,6 +68,7 @@ def _new_state(host_name, host_gender, lang):
         "stepIdx": 0,
         "phase": "First Glance",
         "truthStreak": {},
+        "typeStreak": {},
         "ledger": {},
         "oathSworn": False,
         "recent": [],

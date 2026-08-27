@@ -1,9 +1,43 @@
 #!/usr/bin/env python3
 """Shared game logic for Dirty Truth & Dare — pure functions, fully testable."""
 
-TRUTH_LIMIT = 3  # N truths in a row -> next pick is forced to a dare
+TRUTH_LIMIT = 3  # N same-type picks in a row -> the next pick is forced to the other type
 PENALTY_AMOUNT = 100  # dollars owed per skipped / not-performed task
 OATH_ROUND = 5  # the oath is sworn when the game reaches this round
+
+
+# ---------------------------------------------------------------------------
+# Slow-burn guardrail — the heat dial cannot outrun the story. Early rounds
+# cap effective heat so round-1 EXTREME requests collapse down to their phase.
+# ---------------------------------------------------------------------------
+def heat_ceiling_for_round(round_no):
+    """Max heat allowed at a given round (1-indexed)."""
+    r = max(1, int(round_no))
+    if r <= 2:
+        return 3   # First Glance stays sweet
+    if r <= 4:
+        return 5   # Warming Up tops out steamy
+    return 10      # Oath and beyond: the dial rules
+
+
+def type_streak_logic(t, d, chosen, limit=TRUTH_LIMIT):
+    """Pure per-player streak state machine for BOTH challenge types.
+
+    Returns (new_t, new_d, was_forced).
+    - picking truth with t >= limit-1: FORCED dare (t->0, d=1), was_forced=True
+    - picking dare  with d >= limit-1: FORCED truth (d->0, t=1), was_forced=True
+    - a normal truth pick resets d and increments t; vice versa.
+    """
+    t = max(0, int(t))
+    d = max(0, int(d))
+    chosen = "dare" if str(chosen).lower() == "dare" else "truth"
+    if chosen == "truth":
+        if t >= limit - 1:
+            return 0, 1, True
+        return t + 1, 0, False
+    if d >= limit - 1:
+        return 1, 0, True
+    return 0, d + 1, False
 
 # ---------------------------------------------------------------------------
 # Game phases — mystery pacing. Players see only the poetic phase name,
@@ -394,20 +428,6 @@ def normalize_steps(obj, heat):
 
 
 def truth_streak_logic(streak, chosen_type, limit=TRUTH_LIMIT):
-    """Pure truth-streak state machine.
-
-    A player may pick truth at most (limit - 1) times in a row.
-    The next consecutive truth pick is FORCED to a dare and the streak resets.
-
-    Returns (new_streak, was_forced).
-    - If streak >= limit - 1 and chosen_type == 'truth': forced dare, streak -> 0.
-    - If chosen_type == 'truth': streak increments.
-    - If chosen_type == 'dare': streak resets to 0.
-    """
-    streak = max(0, int(streak))
-    chosen_type = "dare" if str(chosen_type).lower() == "dare" else "truth"
-    if chosen_type == "truth" and streak >= limit - 1:
-        return 0, True
-    if chosen_type == "truth":
-        return streak + 1, False
-    return 0, False
+    """Legacy wrapper over type_streak_logic for truth-only callers."""
+    new_t, _d, was_forced = type_streak_logic(int(streak), 0, chosen_type, limit)
+    return (0 if was_forced else new_t), was_forced

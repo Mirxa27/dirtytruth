@@ -4,6 +4,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import pytest
 import app as appmod
+import game_logic
 import rooms
 from app import app
 
@@ -257,12 +258,14 @@ def test_chat_malformed_heat(client, monkeypatch):
 # /api/streak — pure logic endpoint
 # ---------------------------------------------------------------------------
 def test_streak_endpoint(client):
+    # legacy body shape still honored
     r = client.post("/api/streak", json={"streak": 0, "chosen": "truth"})
-    assert r.get_json() == {"streak": 1, "forced": False, "limit": 3}
+    assert r.get_json() == {"t": 1, "d": 0, "streak": 1, "forced": False, "limit": 3}
     r = client.post("/api/streak", json={"streak": 2, "chosen": "truth"})
-    assert r.get_json() == {"streak": 0, "forced": True, "limit": 3}
+    assert r.get_json() == {"t": 0, "d": 1, "streak": 0, "forced": True, "limit": 3}
+    # picking dare after two legacy truths starts a fresh dare counter
     r = client.post("/api/streak", json={"streak": 2, "chosen": "dare"})
-    assert r.get_json() == {"streak": 0, "forced": False, "limit": 3}
+    assert r.get_json() == {"t": 0, "d": 1, "streak": 1, "forced": False, "limit": 3}
 
 def test_oath_endpoint_due(client):
     r = client.post("/api/oath", json={"round": 5})
@@ -785,3 +788,78 @@ def test_no_private_indexing(client):
     assert r.headers.get("X-Robots-Tag") == "noindex, nofollow"
     html = client.get("/").get_data(as_text=True)
     assert 'name="robots"' in html and "noindex" in html
+
+
+# ---------------------------------------------------------------------------
+# v5.4 — round logic (heat ceiling, symmetric streaks), Arabic TTS provider
+# ---------------------------------------------------------------------------
+def test_heat_ceiling_for_round():
+    assert game_logic.heat_ceiling_for_round(1) == 3
+    assert game_logic.heat_ceiling_for_round(2) == 3
+    assert game_logic.heat_ceiling_for_round(3) == 5
+    assert game_logic.heat_ceiling_for_round(4) == 5
+    for r in range(5, 15):
+        assert game_logic.heat_ceiling_for_round(r) == 10
+    assert game_logic.heat_ceiling_for_round(-3) == 3
+
+
+def test_generate_caps_requested_heat_early_rounds(client, monkeypatch):
+    monkeypatch.setattr(appmod, "call_llm", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("down")))
+    r = client.post("/api/generate", json={"chosen": "truth", "round": 1, "heat": 10,
+                                           "players": [{"name": "A"}, {"name": "B"}]})
+    d = r.get_json()
+    assert d["engine"] == "fallback"
+    assert d["heat"] <= game_logic.heat_ceiling_for_round(1)   # round 1 can't be EXTREME
+    r2 = client.post("/api/generate", json={"chosen": "dare", "round": 9, "heat": 7,
+                                            "players": [{"name": "A"}, {"name": "B"}]})
+    assert r2.get_json()["heat"] == 7                          # post-Oath dial rules
+
+
+def test_type_streak_symmetric_forcing():
+    # truths escalate to a forced dare
+    assert game_logic.type_streak_logic(1, 0, "truth") == (2, 0, False)
+    assert game_logic.type_streak_logic(2, 0, "truth") == (0, 1, True)
+    # dares escalate to a forced truth — the mirror rule
+    assert game_logic.type_streak_logic(0, 1, "dare") == (0, 2, False)
+    assert game_logic.type_streak_logic(0, 2, "dare") == (1, 0, True)
+    # a normal truth pick (t < limit-1) always resets the dare counter
+    assert game_logic.type_streak_logic(1, 1, "truth") == (2, 0, False)
+    assert game_logic.type_streak_logic(1, 4, "truth") == (2, 0, False)
+
+
+def test_streak_new_contract_counts_dares(client):
+    r = client.post("/api/streak", json={"t": 0, "d": 2, "chosen": "dare"})
+    d = r.get_json()
+    assert d["forced"] is True and d["t"] == 1 and d["d"] == 0
+
+
+def test_tts_arabic_prefers_edge_provider(client, monkeypatch):
+    import sys as _sys, types as _types
+    fake = _types.ModuleType("edge_tts")
+    class FakeComm:
+        def __init__(self, text, voice): assert text and voice.startswith("ar-")
+        async def stream(self):
+            yield {"type": "audio", "data": b"ID3arabic"}
+            yield {"type": "WordBoundary"}
+    fake.Communicate = FakeComm
+    monkeypatch.setitem(_sys.modules, "edge_tts", fake)
+    r = client.post("/api/tts", json={"text": "مرحبا", "lang": "ar"})
+    assert r.status_code == 200
+    assert r.headers["Content-Type"] == "audio/mpeg"
+    assert b"ID3arabic" in r.data
+
+
+def test_tts_arabic_falls_back_when_edge_disabled(client, monkeypatch):
+    monkeypatch.setattr(appmod, "EDGE_TTS_ENABLED", False)
+    # point Kokoro somewhere unreachable so the fallback path is deterministic
+    monkeypatch.setattr(appmod, "TTS_URL", "http://127.0.0.1:9/v1/audio/speech")
+    r = client.post("/api/tts", json={"text": "مرحبا", "lang": "ar"})
+    assert r.status_code == 502
+
+
+def test_room_set_streaks_action(client):
+    c = client.post("/api/room/create", json={"name": "Alex"}).get_json()["code"]
+    r = client.post("/api/room/action", json={"code": c, "action": "set_streaks",
+                                              "player": "Sam", "t": 2, "d": 1})
+    st = r.get_json()["state"]
+    assert st["typeStreak"]["Sam"] == {"t": 2, "d": 1}

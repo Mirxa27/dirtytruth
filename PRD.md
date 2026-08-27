@@ -223,6 +223,15 @@ Setup (names, genders, heat, language, secret preferences)
   echo loops; Cassia chat fires real challenges and heat changes broadcast;
   rate limits extended to the room API (anti-brute-force join caps, Retry-After);
   visibility-aware polling with error backoff + reconnecting indicator.
+- **v5.3** — language picker repaired end-to-end: real native labels (was
+  "undefined" since v5), fully themed options, two-way room language sync,
+  silent mid-round re-render (no TTS replay), translated oath everywhere.
+- **v5.4** — real Arabic speech via Edge neural voices with Kokoro fallback;
+  crafting loader with cycling tease lines and busy-guards; slow-burn heat
+  ceilings per round (1–2→3, 3–4→5) applied server-side; symmetric 3-dare
+  forcing rule with per-player 💜/🔥 counters; reworked bottle spin
+  (deterministic ±40° facing, overshoot settle, decaying ticks, reveal beat);
+  phase journey dots and capped-heat feedback.
   ← **this release**
 
 ## 13. Success metrics

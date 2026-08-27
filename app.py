@@ -15,11 +15,12 @@ from game_logic import (
     OATH_ROUND,
     fallback_challenge,
     normalize_steps,
-    truth_streak_logic,
+    type_streak_logic,
     phase_for_round,
     oath_due,
     record_penalty,
     penalty_summary,
+    heat_ceiling_for_round,
 )
 from languages import LANGUAGES, get_lang, language_directive, tts_voice
 import rooms
@@ -54,6 +55,39 @@ LLM_KEY = os.environ.get("LLM_KEY", "")
 LLM_MODEL = os.environ.get("LLM_MODEL", "local-model")
 TTS_URL = os.environ.get("TTS_URL", "http://127.0.0.1:8880/v1/audio/speech")
 TTS_VOICE = os.environ.get("TTS_VOICE", "af_heart")
+# Kokoro has no Arabic voice/training data — Arabic speech is served by
+# Microsoft's Edge neural voices instead (native quality, reachable from the
+# origin box and from Vercel Lambdas alike).
+TTS_AR_VOICE = os.environ.get("DT_TTS_AR_VOICE", "ar-SA-ZariyahNeural")
+EDGE_TTS_ENABLED = os.environ.get("DT_EDGE_TTS", "1") != "0"
+EDGE_TTS_TIMEOUT = float(os.environ.get("DT_EDGE_TTS_TIMEOUT", "9"))
+
+
+def tts_via_edge(text, voice=None):
+    """Synthesize `text` with an Edge neural voice; returns MP3 bytes or None."""
+    if not EDGE_TTS_ENABLED:
+        return None
+    try:
+        import asyncio
+        import edge_tts
+    except ImportError:
+        return None
+
+    async def _synth():
+        comm = edge_tts.Communicate(text, voice or TTS_AR_VOICE)
+        buf = bytearray()
+        async for chunk in comm.stream():
+            if chunk.get("type") == "audio":
+                buf.extend(chunk.get("data") or b"")
+        return bytes(buf) or None
+
+    async def _guarded():
+        return await asyncio.wait_for(_synth(), timeout=EDGE_TTS_TIMEOUT)
+
+    try:
+        return asyncio.run(_guarded())
+    except Exception:
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -314,6 +348,11 @@ def tts():
         return jsonify({"error": "empty text"}), 400
     lang = get_lang(data.get("lang", "en"))
     voice = str(data.get("voice", ""))[:20] or tts_voice(lang["code"])
+    # Arabic has no Kokoro voice — go straight to Edge neural speech
+    if lang["code"] == "ar":
+        audio = tts_via_edge(text)
+        if audio:
+            return audio, 200, {"Content-Type": "audio/mpeg", "Cache-Control": "no-store"}
     try:
         r = requests.post(
             TTS_URL,
@@ -432,6 +471,8 @@ def generate():
         round_no = max(1, int(data.get("round", 1)))
     except (TypeError, ValueError):
         heat, round_no = 3, 1
+    # slow-burn guardrail: pre-Oath rounds can't outrun their phase
+    eff_heat = min(heat, heat_ceiling_for_round(round_no))
     recent = [str(q)[:200] for q in (data.get("recent") or []) if isinstance(q, (str, int, float))][-8:]
 
     players_desc = ", ".join(
@@ -452,7 +493,7 @@ def generate():
         f"Chosen type: {chosen.upper()}\n"
         f"Target player (the one who must {'answer' if chosen == 'truth' else 'perform'}): {target}\n"
         f"Partner (the other player): {partner_name}\n"
-        f"Current heat level: {heat}/10 — match this EXACTLY, do not exceed it.\n"
+        f"Current heat level: {eff_heat}/10 — match this EXACTLY, do not exceed it.\n"
         f"Game phase: {phase['name']} — {phase['desc']}\n"
         f"Game round: {round_no} (early rounds = build tension slowly)\n"
         f"Recent challenges (do NOT repeat or rephrase these): {json.dumps(recent) if recent else 'none — this is the first challenge'}\n"
@@ -472,7 +513,7 @@ def generate():
             "max_tokens": 1600,
         })
         obj = parse_json(raw)
-        norm = normalize_steps(obj, heat)
+        norm = normalize_steps(obj, eff_heat)
         if norm:
             title, steps = norm
             validated = validate_challenge(chosen, title, steps)
@@ -480,7 +521,7 @@ def generate():
                 vtitle, vsteps = validated
                 if lang["code"] != "en":
                     vtitle, vsteps = _translate_challenge(vtitle, vsteps, lang["code"])
-                return jsonify({"type": chosen, "title": vtitle, "steps": vsteps, "heat": heat, "engine": "cassia", "phase": phase["name"]})
+                return jsonify({"type": chosen, "title": vtitle, "steps": vsteps, "heat": eff_heat, "engine": "cassia", "phase": phase["name"]})
         # LLM returned nothing usable -> fall through to the real fallback
     except Exception:
         pass
@@ -488,7 +529,7 @@ def generate():
     title, steps = fallback_challenge(chosen, heat, target, partner_name, recent)
     if lang["code"] != "en":
         title, steps = _translate_challenge(title, steps, lang["code"])
-    return jsonify({"type": chosen, "title": title, "steps": steps, "heat": heat, "engine": "fallback", "phase": phase["name"]})
+    return jsonify({"type": chosen, "title": title, "steps": steps, "heat": eff_heat, "engine": "fallback", "phase": phase["name"]})
 
 
 @app.route("/api/chat", methods=["POST"])
@@ -553,15 +594,30 @@ def chat():
 
 @app.route("/api/streak", methods=["POST"])
 def streak():
-    """Pure truth-streak state machine (authoritative server-side logic)."""
+    """Symmetric type-streak state machine (authoritative server-side logic).
+
+    Body: {t, d, chosen} — consecutive pick counters per player. Three truths
+    in a row force a dare; three dares in a row force a truth. Legacy bodies
+    {streak, chosen} are accepted: `streak` maps onto the truth counter.
+    """
     data = request.get_json(force=True, silent=True) or {}
     try:
-        streak = max(0, int(data.get("streak", 0)))
+        t = data.get("t")
+        d = data.get("d")
+        if t is None and d is None:
+            t = int(data.get("streak", 0))
+            d = 0
+        t = max(0, int(t or 0))
+        d = max(0, int(d or 0))
         chosen = "dare" if str(data.get("chosen", "truth")).lower() == "dare" else "truth"
     except (TypeError, ValueError):
         return jsonify({"error": "bad input"}), 400
-    new_streak, was_forced = truth_streak_logic(streak, chosen)
-    return jsonify({"streak": new_streak, "forced": was_forced, "limit": TRUTH_LIMIT})
+    new_t, new_d, was_forced = type_streak_logic(t, d, chosen)
+    return jsonify({
+        "t": new_t, "d": new_d,
+        "streak": new_t if chosen == "truth" else new_d,  # legacy field
+        "forced": was_forced, "limit": TRUTH_LIMIT,
+    })
 
 
 @app.route("/api/oath", methods=["POST"])
@@ -707,6 +763,14 @@ def room_action():
                 s["truthStreak"][name] = max(0, int(data.get("streak", 0)))
             except (TypeError, ValueError):
                 pass
+        elif action == "set_streaks":
+            name = str(data.get("player", ""))[:30]
+            try:
+                ts = max(0, min(9, int(data.get("t", 0))))
+                ds = max(0, min(9, int(data.get("d", 0))))
+            except (TypeError, ValueError):
+                return
+            s.setdefault("typeStreak", {})[name] = {"t": ts, "d": ds}
         elif action == "penalty":
             player = str(data.get("player", "Player"))[:30].strip() or "Player"
             reason = str(data.get("reason", "skipped"))[:60] or "skipped"

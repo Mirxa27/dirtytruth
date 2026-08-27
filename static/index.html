@@ -187,6 +187,23 @@
   /* entrance animation */
   .card.enter{animation:enter .4s ease}
   @keyframes enter{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
+
+  /* Cassia crafting overlay — shown while a challenge is generated */
+  #loadingCard{text-align:center;padding:28px 16px}
+  #loadingCard .cassia-busy{display:block;font-size:2.1rem;margin-bottom:10px;animation:cassiaPulse 1.2s ease-in-out infinite}
+  @keyframes cassiaPulse{50%{transform:scale(1.18)}}
+  .spinner{width:42px;height:42px;margin:0 auto 14px;border-radius:50%;
+    border:3px solid rgba(139,92,246,.22);border-top-color:var(--pink);
+    animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .load-line{color:var(--dim);font-size:.92rem;min-height:1.3em;animation:pulseTxt 1.4s ease-in-out infinite}
+  @keyframes pulseTxt{50%{opacity:.45}}
+
+  /* phase journey dots */
+  #phaseDots{display:flex;gap:7px;justify-content:center;margin:-6px 0 12px;position:relative;z-index:1}
+  .pdot{width:7px;height:7px;border-radius:50%;background:#2a2a3d;transition:.3s}
+  .pdot.done{background:var(--purple)}
+  .pdot.cur{background:linear-gradient(135deg,var(--pink),var(--gold));box-shadow:0 0 8px rgba(255,45,120,.65);transform:scale(1.35)}
 </style>
 </head>
 <body>
@@ -292,6 +309,7 @@
       <input type="range" id="heatRange2" min="1" max="10" value="2">
       <div class="heatlabel" id="heatLabel2"></div>
     </div>
+    <div id="phaseDots"></div>
 
     <!-- room status (in-game) -->
     <div class="card hidden" id="roomGameCard" style="padding:10px 14px">
@@ -323,6 +341,13 @@
         <button class="choice-btn dare" id="dareBtn"><span class="choice-ico">🔥</span><span data-i18n="dare">Dare</span></button>
       </div>
       <div class="streaks" id="choiceStreaks"></div>
+    </div>
+
+    <!-- LOADING (Cassia is crafting) -->
+    <div class="card hidden" id="loadingCard">
+      <span class="cassia-busy">💋</span>
+      <div class="spinner"></div>
+      <div class="load-line" id="loadLine"></div>
     </div>
 
     <!-- CHALLENGE -->
@@ -409,6 +434,7 @@ const I18N = {
     oathMsg:"Oath sealed, {names}. From this moment, every word and every dare is real. The game just got serious — spin when you're ready.",
     skipMsg:"{name} skips. That's a hundred dollar penalty.", refuseMsg:"{name} refuses. That's a hundred dollar penalty.",
     banter:["Mmm, you're doing so well…","The tension is *aching* now, isn't it?","Keep going. I can feel it building.","You two are getting dangerously close to the edge.","Slow down… or don't. Your call, darling."],
+    forcedTruth:"⚡ 3 dares in a row — this one's a TRUTH!", heatCapped:"Pace held at {h}/10 — the burn earns itself 🔥", loadLines:["Mixing your secrets…", "Reading between the lines…", "Lighting the fuse…", "Choosing something delicious…"],
     roomWatching:"Room {code} · playing together", roomGone:"That room is gone — let's start fresh.", resynced:"Reconnected to the game",
     spinSpinning:"🍾 spinning…", craftTruth:"💋 Cassia is crafting your truth…", craftDare:"💋 Cassia is crafting your dare…",
     netFail:"Take a deep breath and try again.",
@@ -449,6 +475,7 @@ const I18N = {
     oathMsg:"Juramento sellado, {names}. Desde este momento, cada palabra y cada reto es real. El juego se puso serio — gira cuando estés listo.",
     skipMsg:"{name} salta. Eso es una penalización de cien dólares.", refuseMsg:"{name} se niega. Eso es una penalización de cien dólares.",
     banter:["Mmm, lo están haciendo muy bien…","La tensión *duele* ahora, ¿verdad?","Sigue. Puedo sentirlo crecer.","Ustedes dos están peligrosamente cerca del borde.","Lento… o no. Tú decides, cariño."],
+    forcedTruth:"⚡ 3 retos seguidos — ¡esta es una VERDAD!", heatCapped:"Se mantiene en {h}/10 — el fuego se gana solo 🔥", loadLines:["Mezclando sus secretos…", "Leyendo entre líneas…", "Encendiendo la mecha…", "Eligiendo algo delicioso…"],
     roomWatching:"Sala {code} · jugando juntos", roomGone:"Esa sala ya no existe — empecemos de nuevo.", resynced:"Reconectado al juego",
     spinSpinning:"🍾 girando…", craftTruth:"💋 Cassia está creando tu verdad…", craftDare:"💋 Cassia está creando tu reto…",
     netFail:"Respira hondo y vuelve a intentarlo.",
@@ -489,6 +516,7 @@ const I18N = {
     oathMsg:"Serment scellé, {names}. Dès cet instant, chaque mot et chaque défi est réel. Le jeu est devenu sérieux — tournez quand vous êtes prêt.",
     skipMsg:"{name} passe. C'est une pénalité de cent dollars.", refuseMsg:"{name} refuse. C'est une pénalité de cent dollars.",
     banter:["Mmm, vous vous en sortez si bien…","La tension *fait mal* maintenant, n'est-ce pas ?","Continuez. Je sens que ça monte.","Vous deux êtes dangereusement proches du bord.","Doucement… ou non. À vous de voir, chéri."],
+    forcedTruth:"⚡ 3 défis d'affilée — celui-ci est une VÉRITÉ !", heatCapped:"On reste à {h}/10 — le feu se mérite 🔥", loadLines:["Je mélange vos secrets…", "Je lis entre les lignes…", "J'allume la mèche…", "Je choisis quelque chose de délicieux…"],
     roomWatching:"Salle {code} · vous jouez ensemble", roomGone:"Cette salle n'existe plus — reprenons à zéro.", resynced:"Reconnecté au jeu",
     spinSpinning:"🍾 ça tourne…", craftTruth:"💋 Cassia prépare ta vérité…", craftDare:"💋 Cassia prépare ton défi…",
     netFail:"Respirez un bon coup et réessayez.",
@@ -529,6 +557,7 @@ const I18N = {
     oathMsg:"Eid versiegelt, {names}. Ab diesem Moment ist jedes Wort und jede Mutprobe real. Das Spiel wurde ernst — drehe, wenn du bereit bist.",
     skipMsg:"{name} springt über. Das ist eine Strafe von hundert Dollar.", refuseMsg:"{name} verweigert. Das ist eine Strafe von hundert Dollar.",
     banter:["Mmm, ihr macht das so gut…","Die Spannung *tut weh* jetzt, oder?","Mach weiter. Ich spüre, wie es steigt.","Ihr zwei seid gefährlich nah am Rand.","Langsam… oder nicht. Du entscheidest, Schatz."],
+    forcedTruth:"⚡ 3 Mutproben in Folge — das ist eine WAHRHEIT!", heatCapped:"Bleibt bei {h}/10 — die Glut muss wachsen 🔥", loadLines:["Ich mische eure Geheimnisse…", "Ich lese zwischen den Zeilen…", "Ich zünde die Lunte…", "Ich wähle etwas Köstliches…"],
     roomWatching:"Raum {code} · ihr spielt zusammen", roomGone:"Dieser Raum ist weg — fangen wir neu an.", resynced:"Mit dem Spiel verbunden",
     spinSpinning:"🍾 dreht sich…", craftTruth:"💋 Cassia stellt deine Wahrheit zusammen…", craftDare:"💋 Cassia stellt deine Mutprobe zusammen…",
     netFail:"Atme tief durch und versuch es noch einmal.",
@@ -569,6 +598,7 @@ const I18N = {
     oathMsg:"Giuramento sigillato, {names}. Da questo momento, ogni parola e ogni sfida è reale. Il gioco è diventato serio — gira quando sei pronto.",
     skipMsg:"{name} salta. È una penalità di cento dollari.", refuseMsg:"{name} rifiuta. È una penalità di cento dollari.",
     banter:["Mmm, ci state andando così bene…","La tensione *fa male* adesso, vero?","Continua. Lo sento crescere.","Voi due siete pericolosamente vicini al bordo.","Piano… o no. Tu decidi, tesoro."],
+    forcedTruth:"⚡ 3 sfide di fila — questa è una VERITÀ!", heatCapped:"Restiamo a {h}/10 — il fuoco va guadagnato 🔥", loadLines:["Mescolo i vostri segreti…", "Leggo tra le righe…", "Accendo la miccia…", "Scelgo qualcosa di delizioso…"],
     roomWatching:"Stanza {code} · giocate insieme", roomGone:"Quella stanza non esiste più — ricominciamo.", resynced:"Riconnesso al gioco",
     spinSpinning:"🍾 sta girando…", craftTruth:"💋 Cassia sta creando la tua verità…", craftDare:"💋 Cassia sta creando la tua sfida…",
     netFail:"Fai un respiro profondo e riprova.",
@@ -609,6 +639,7 @@ const I18N = {
     oathMsg:"Juramento selado, {names}. A partir deste momento, cada palavra e cada desafio é real. O jogo ficou sério — gire quando estiver pronto.",
     skipMsg:"{name} pula. Isso é uma penalidade de cem dólares.", refuseMsg:"{name} recusa. Isso é uma penalidade de cem dólares.",
     banter:["Mmm, vocês estão indo tão bem…","A tensão *dói* agora, não?","Continue. Eu sinto crescer.","Vocês dois estão perigosamente perto da beira.","Devagar… ou não. Você decide, querido."],
+    forcedTruth:"⚡ 3 desafios seguidos — esta é uma VERDADE!", heatCapped:"Segura em {h}/10 — o fogo se conquista 🔥", loadLines:["Misturando os segredos…", "Lendo nas entrelinhas…", "Acendendo o pavio…", "Escolhendo algo delicioso…"],
     roomWatching:"Sala {code} · jogando juntos", roomGone:"Essa sala acabou — vamos começar de novo.", resynced:"Reconectado ao jogo",
     spinSpinning:"🍾 girando…", craftTruth:"💋 Cassia está criando sua verdade…", craftDare:"💋 Cassia está criando seu desafio…",
     netFail:"Respire fundo e tente de novo.",
@@ -649,6 +680,7 @@ const I18N = {
     oathMsg:"शपथ सील, {names}। इस क्षण से, हर शब्द और हर चुनौती वास्तविक है। खेल गंभीर हो गया — तैयार होने पर घुमाएँ।",
     skipMsg:"{name} छोड़ता है। यह सौ डॉलर का जुर्माना है।", refuseMsg:"{name} मना करता है। यह सौ डॉलर का जुर्माना है।",
     banter:["मम्, आप बहुत अच्छा कर रहे हैं…","तनाव अब *दर्द* दे रहा है, है ना?","आगे बढ़ें। मुझे लग रहा है कि यह बढ़ रहा है।","आप दोनों किनारे के खतरनाक करीब हैं।","धीरे… या नहीं। आप तय करें, प्रिय।"],
+    forcedTruth:"⚡ लगातार 3 चुनौतियाँ — यह एक सच है!", heatCapped:"गति {h}/10 पर — आग धीरे-धीरे बनती है 🔥", loadLines:["आपके राज़ मिला रहे हैं…", "पंक्तियों के बीच पढ़ रही हूँ…", "चिंगारी सुलगा रही हूँ…", "कुछ स्वादिष्ट चुन रही हूँ…"],
     roomWatching:"रूम {code} · साथ खेल रहे हैं", roomGone:"वह रूम अब नहीं है — नया शुरू करें।", resynced:"खेल से फिर जुड़े",
     spinSpinning:"🍾 घूम रही है…", craftTruth:"💋 कैसिया आपका सच बना रही है…", craftDare:"💋 कैसिया आपकी चुनौती बना रही है…",
     netFail:"गहरी सांस लें और फिर कोशिश करें।",
@@ -689,6 +721,7 @@ const I18N = {
     oathMsg:"誓いを封印、{names}。この瞬間から、すべての言葉と挑戦が本物です。ゲームが本気になりました — 準備ができたら回してください。",
     skipMsg:"{name}がスキップ。百ドルの罰金です。", refuseMsg:"{name}が拒否。百ドルの罰金です。",
     banter:["mmm、とても上手です…","緊張が今*痛い*ですよね？","続けて。高まるのを感じます。","あなたたちは限界に危険なくらい近づいています。","ゆっくり…でもなくてもいい。あなたが決めなさい、愛しい人。"],
+    forcedTruth:"挑戦を3回連続 — 今度は真実！", heatCapped:"ペースは{h}/10を維持 — 火は育てるもの 🔥", loadLines:["二人の秘密を混ぜ中…", "行間を読んでいます…", "導火線に火をつけて…", "素敵なものを選んでいます…"],
     roomWatching:"ルーム {code} · 二人でプレイ中", roomGone:"そのルームはもうありません — 新しく始めましょう。", resynced:"ゲームに再接続しました",
     spinSpinning:"🍾 回転中…", craftTruth:"💋 カシアがあなたの真実を作っています…", craftDare:"💋 カシアがあなたの挑戦を作っています…",
     netFail:"深呼吸して、もう一度試してください。",
@@ -729,6 +762,7 @@ const I18N = {
     oathMsg:"誓言封印，{names}。从这一刻起，每个词和每个胆量都是真实的。游戏变得认真了——准备好就转动。",
     skipMsg:"{name}跳过了。这是100美元的罚款。", refuseMsg:"{name}拒绝了。这是100美元的罚款。",
     banter:["嗯，你们做得很好…","现在张力*让人难受*，对吧？","继续。我能感觉到它在升温。","你们两个危险地接近边缘。","慢一点…或者不。你决定，亲爱的。"],
+    forcedTruth:"连续3次胆量——这次是真相！", heatCapped:"节奏保持在 {h}/10 —— 火候要慢慢来 🔥", loadLines:["正在混合你们的秘密…", "字里行间解读中…", "点燃引线…", "挑选美妙的内容…"],
     roomWatching:"房间 {code} · 一起游戏中", roomGone:"那个房间已不存在——重新开始吧。", resynced:"已重新连接到游戏",
     spinSpinning:"🍾 旋转中…", craftTruth:"💋 Cassia 正在为你构思真相…", craftDare:"💋 Cassia 正在为你构思胆量…",
     netFail:"深呼吸，然后再试一次。",
@@ -769,6 +803,7 @@ const I18N = {
     oathMsg:"خُتم القسم، {names}. من هذه اللحظة، كل كلمة وكل تحدٍّ حقيقي. اللعبة أصبحت جدّية — أدر عندما تكون جاهزاً.",
     skipMsg:"{name} يتخطّى. هذه غرامة مئة دولار.", refuseMsg:"{name} يرفض. هذه غرامة مئة دولار.",
     banter:["مم، أنتما تفعلان ذلك بشكل جميل…","التوتر *يؤلم* الآن، أليس كذلك؟","واصل. أشعر أنه يتصاعد.","أنتما قريبان بشكل خطير من الحافة.","ببطء… أو لا. أنت تقرر، يا حبيبي."],
+    forcedTruth:"ثلاثة تحديات متتالية — هذه حقيقة!", heatCapped:"نبقى عند {h}/10 — اللهب يستحق نفسه 🔥", loadLines:["أمزج أسراركما…", "أقرأ ما بين السطور…", "أشعل الفتيل…", "أختار شيئاً لذيذاً…"],
     roomWatching:"غرفة {code} · تلعبان معاً", roomGone:"تلك الغرفة لم تعد موجودة — لنبدأ من جديد.", resynced:"تمت إعادة الاتصال باللعبة",
     spinSpinning:"🍾 تدور…", craftTruth:"💋 كاسيا تعدّ لك حقيقة…", craftDare:"💋 كاسيا تعدّ لك تحدّياً…",
     netFail:"خذ نفساً عميقاً وحاول مجدداً.",
@@ -831,7 +866,9 @@ const state = {
   autoEscalate: true,
   recent: [],
   spinning: false,
+  generating: false,
   truthStreak: {},
+  typeStreak: {},
   forcedDare: false,
   oathSworn: false,
   ledger: {},
@@ -987,11 +1024,27 @@ function phaseForRound(r){
   if(r <= 8) return {name: names[3], desc: descs[3]};
   return {name: names[4], desc: descs[4]};
 }
+function phaseIndexForRound(r){
+  r = Math.max(1, r|0);
+  if(r <= 2) return 0;
+  if(r <= 4) return 1;
+  if(r === OATH_ROUND) return 2;
+  if(r <= 8) return 3;
+  return 4;
+}
 window.phaseForRound = phaseForRound;
+window.phaseIndexForRound = phaseIndexForRound;
+function renderPhaseDots(){
+  const wrap = $("#phaseDots"); if(!wrap) return;
+  const cur = phaseIndexForRound(state.round);
+  wrap.innerHTML = [0,1,2,3,4].map(i =>
+    `<span class="pdot${i<cur?' done':''}${i===cur?' cur':''}"></span>`).join('');
+}
 function renderPhase(){
   const p = phaseForRound(state.round);
   const el = $("#phasePill"); if(el) el.innerHTML = `🌫️ <b>${esc(p.name)}</b>`;
   if(el) el.title = p.desc;
+  renderPhaseDots();
   // heat glow
   const glow = state.heat / 10;
   document.documentElement.style.setProperty("--glow", glow.toFixed(2));
@@ -1030,16 +1083,25 @@ function recordPenalty(player, reason){
 window.recordPenalty = recordPenalty;
 
 /* =========================================================================
-   Streaks
+   Streaks (per player: consecutive-truth AND consecutive-dare counters)
    ========================================================================= */
+function myStreaks(name){
+  const s = state.typeStreak[name] || {};
+  const legacy = typeof state.truthStreak[name] === "number" ? state.truthStreak[name] : 0;
+  return {
+    t: typeof s.t === "number" ? s.t : legacy,
+    d: typeof s.d === "number" ? s.d : 0,
+  };
+}
+window.myStreaks = myStreaks;
 function renderStreaks(){
   const el = $("#streaks"); if(!el) return;
   el.innerHTML = state.players.map(p => {
-    const s = state.truthStreak[p.name] || 0;
-    let cls = "streak-pill", label = `${esc(p.name)}: ${s}/${TRUTH_LIMIT-1} 💜`;
-    if(s >= TRUTH_LIMIT-1){ cls += " forced"; label = `⚡ ${esc(p.name)}: next is a DARE!`; }
-    else if(s >= 1){ cls += " warn"; }
-    return `<div class="${cls}">${label}</div>`;
+    const st = myStreaks(p.name);
+    const tw = st.t >= TRUTH_LIMIT-1 ? " warn" : "";
+    const dw = st.d >= TRUTH_LIMIT-1 ? " warn" : "";
+    return `<div class="streak-pill${tw}">${esc(p.name)} 💜 ${st.t}/${TRUTH_LIMIT-1}</div>` +
+           `<div class="streak-pill${dw}">🔥 ${st.d}/${TRUTH_LIMIT-1}</div>`;
   }).join('');
   const cs = $("#choiceStreaks"); if(cs) cs.innerHTML = el.innerHTML;
 }
@@ -1170,6 +1232,7 @@ function applyRemoteState(s){
   // ---- fields BOTH roles accept from the server -------------------------
   // guest-contributed data and prefs flow both ways.
   state.truthStreak = s.truthStreak || {};
+  state.typeStreak = s.typeStreak || {};
   state.ledger = s.ledger || {};
   state.recent = s.recent || [];
   state.prefs = s.prefs || {};
@@ -1309,10 +1372,53 @@ $("#cancelRoomBtn").addEventListener("click", () => {
 });
 
 /* =========================================================================
+   Loading — shown while Cassia crafts a challenge
+   ========================================================================= */
+let loadTimer = null;
+function startLoading(){
+  const lines = t("loadLines") || ["…"];
+  $("#loadingCard").classList.remove("hidden");
+  $("#loadingCard").classList.add("enter");
+  let i = 0;
+  $("#loadLine").textContent = lines[0];
+  clearInterval(loadTimer);
+  loadTimer = setInterval(() => { i = (i+1) % lines.length; $("#loadLine").textContent = lines[i]; }, 1100);
+  state.generating = true;
+  if(state.roomCode) stopRoomPolling(); // hold the mirror while we drive
+}
+function stopLoading(){
+  clearInterval(loadTimer); loadTimer = null;
+  $("#loadingCard").classList.add("hidden");
+  state.generating = false;
+  if(!$("#gameUI").classList.contains("hidden")) $("#spinBtn").disabled = false;
+  if(state.roomCode) startRoomPolling();
+}
+window.startLoading = startLoading;
+window.stopLoading = stopLoading;
+
+/* =========================================================================
    Spin
    ========================================================================= */
+const SPIN_MS = 2600;
+let spinTickTimers = [];
+function clearSpinTicks(){ spinTickTimers.forEach(clearTimeout); spinTickTimers = []; }
+// deterministic facing: player seat 0 → bottle tilts left (=-40°), seat 1 → right (=+40°)
+function spinFacing(idx){ return idx === 0 ? -40 : 40; }
+window.spinFacing = spinFacing;
+window.spinTargetAngle = function(idx){
+  const turns = 1440 + Math.floor(Math.random()*360);
+  return turns + spinFacing(idx);
+};
+function scheduleSpinTicks(){
+  // whoosh ticks that slow down as the bottle loses momentum
+  const steps = [[350,420,.09],[750,380,.08],[1150,340,.075],[1550,300,.07],[1950,260,.06],[2280,220,.05],[2480,190,.04]];
+  clearSpinTicks();
+  steps.forEach(([at, freq, vol]) => {
+    spinTickTimers.push(setTimeout(() => beep(freq, .05, "square", vol), at));
+  });
+}
 function spin(){
-  if(state.spinning) return;
+  if(state.spinning || state.generating) return;
   state.spinning = true;
   requestWakeLock();
   $("#spinBtn").disabled = true;
@@ -1324,23 +1430,28 @@ function spin(){
   stopTimer();
   renderStreaks(); renderLedger();
   $("#spinStatus").textContent = "🍾 " + (state.role==="guest" ? "…" : t("spinSpinning").replace("🍾 ",""));
-  SFX.spin();
+  SFX.spin(); scheduleSpinTicks();
   const bottle = $("#bottle");
-  let angle = 0;
-  const target = state.players[Math.floor(Math.random()*state.players.length)];
+  const idx = Math.floor(Math.random()*state.players.length);
+  const target = state.players[idx];
   state.target = target;
-  const totalMs = 2600;
+  const finalA = window.spinTargetAngle(idx);
   const start = performance.now();
   function frame(now){
-    const p = Math.min(1, (now-start)/totalMs);
+    const p = Math.min(1, (now-start)/SPIN_MS);
     const ease = 1 - Math.pow(1-p, 3);
-    angle = ease * (720 + Math.random()*360);
-    bottle.style.transform = `rotate(${angle}deg)`;
+    // single subtle overshoot near the settle point, no per-frame jitter
+    const wobble = p > .7 ? Math.sin((p-.7)/.3 * Math.PI*2) * (1-p) * 14 : 0;
+    bottle.style.transform = `rotate(${ease*finalA + wobble}deg)`;
     if(p < 1) requestAnimationFrame(frame);
     else {
-      state.spinning = false;
-      $("#spinBtn").disabled = false;
-      showChoice();
+      bottle.style.transform = `rotate(${finalA % 360}deg)`;
+      clearSpinTicks();
+      setTimeout(() => {
+        state.spinning = false;
+        if(!state.generating) $("#spinBtn").disabled = false;
+        showChoice();
+      }, 420); // let the landing breathe before the reveal
     }
   }
   requestAnimationFrame(frame);
@@ -1352,14 +1463,17 @@ $("#spinBtn").addEventListener("click", spin);
    ========================================================================= */
 function showChoice(){
   const name = state.target.name;
-  $("#choiceTitle").textContent = t("chooseFate", {name});
-  const s = state.truthStreak[name] || 0;
-  const forced = s >= TRUTH_LIMIT - 1;
-  $("#truthBtn").disabled = forced;
-  if(forced){
-    $("#choiceTitle").textContent = t("forcedDare");
-    $("#choiceStreaks").innerHTML = `<div class="streak-pill forced">⚡ ${esc(name)}: next is a DARE!</div>`;
+  const st = myStreaks(name);
+  const truthLocked = st.t >= TRUTH_LIMIT - 1;
+  const dareLocked = st.d >= TRUTH_LIMIT - 1;
+  $("#truthBtn").disabled = truthLocked;
+  $("#dareBtn").disabled = dareLocked;
+  if(truthLocked || dareLocked){
+    $("#choiceTitle").textContent = t(truthLocked ? "forcedDare" : "forcedTruth");
+    $("#choiceStreaks").innerHTML =
+      `<div class="streak-pill forced">⚡ ${esc(name)}: 💜${st.t} 🔥${st.d}</div>`;
   } else {
+    $("#choiceTitle").textContent = t("chooseFate", {name});
     renderStreaks();
   }
   $("#choiceCard").classList.remove("hidden");
@@ -1370,21 +1484,30 @@ function showChoice(){
 window.showChoice = showChoice;
 
 async function pickType(chosen){
+  if(state.generating) return;
   $("#choiceCard").classList.add("hidden");
-  // streak logic (server-authoritative)
   const name = state.target.name;
-  const cur = state.truthStreak[name] || 0;
-  let forced = false;
+  const cur = myStreaks(name);
+  let t = cur.t, d = cur.d, forced = false;
   try{
-    const d = await api("/api/streak", {streak: cur, chosen});
-    state.truthStreak[name] = d.streak; forced = d.forced;
+    // streak logic — authoritative on the server, symmetric for both types
+    const r = await api("/api/streak", {t: t, d: d, chosen});
+    t = r.t; d = r.d; forced = r.forced;
   }catch(e){
-    if(chosen === "truth" && cur >= TRUTH_LIMIT-1){ state.truthStreak[name] = 0; forced = true; }
-    else if(chosen === "truth") state.truthStreak[name] = cur+1;
-    else state.truthStreak[name] = 0;
+    if(chosen === "truth"){
+      if(t >= TRUTH_LIMIT-1){ forced = true; t = 0; d = 1; } else { t++; d = 0; }
+    } else {
+      if(d >= TRUTH_LIMIT-1){ forced = true; d = 0; t = 1; } else { d++; t = 0; }
+    }
   }
-  if(forced) chosen = "dare";
+  if(forced) chosen = chosen === "truth" ? "dare" : "truth";
+  state.typeStreak[name] = {t: t, d: d};
+  state.truthStreak[name] = t; // legacy mirror (rooms + old UI)
   renderStreaks();
+  if(state.roomCode){
+    roomAction("set_streaks", {player: name, t: t, d: d});
+    roomAction("set_streak", {player: name, streak: t});
+  }
   await generateChallenge(chosen);
 }
 $("#truthBtn").addEventListener("click", () => pickType("truth"));
@@ -1394,7 +1517,9 @@ $("#dareBtn").addEventListener("click", () => pickType("dare"));
    Generate challenge
    ========================================================================= */
 async function generateChallenge(chosen){
-  $("#spinStatus").textContent = chosen === "truth" ? t("craftTruth") : t("craftDare");
+  if(state.generating) return null;
+  startLoading();
+  $("#spinStatus").textContent = "";
   const body = {
     players: state.players, chosen, target: state.target.name,
     heat: state.heat, round: state.round, recent: state.recent,
@@ -1406,12 +1531,23 @@ async function generateChallenge(chosen){
   }catch(e){
     d = {type: chosen, title: "…", steps: [{instruction: t("netFail"), seconds: 10}], engine: "error"};
   }
-  state.challenge = d;
-  state.stepIdx = 0;
-  state.recent = [d.title, ...state.recent].slice(0, 8);
-  saveState();
-  if(state.roomCode) roomAction("set_challenge", {challenge: d});
-  renderChallenge();
+  try{
+    // the server may cap the heat to keep the slow-burn arc logical
+    if(typeof d.heat === "number" && d.heat < state.heat){
+      state.heat = d.heat; updateHeatLabel(); renderPhase(); saveState();
+      if(state.roomCode) roomAction("set_heat", {heat: d.heat});
+      toast(t("heatCapped", {h: d.heat}));
+    }
+    state.challenge = d;
+    state.stepIdx = 0;
+    state.recent = [d.title, ...state.recent].slice(0, 8);
+    saveState();
+    if(state.roomCode) roomAction("set_challenge", {challenge: d});
+    renderChallenge();
+    return d;
+  } finally {
+    stopLoading();
+  }
 }
 
 function renderChallenge(opts){
@@ -1626,6 +1762,9 @@ $("#newGameBtn").addEventListener("click", () => {
   state.players = []; state.heat = 2; state.round = 1;
   state.target = null; state.challenge = null; state.stepIdx = 0;
   state.truthStreak = {}; state.recent = []; state.spinning = false; state.forcedDare = false;
+  state.generating = false; state.typeStreak = {};
+  clearSpinTicks();
+  stopLoading();
   state.oathSworn = false; state.ledger = {}; state.prefs = {};
   state.roomCode = null; state.role = null; state.guestJoined = false;
   MIRROR.renderedSig = ""; MIRROR.appliedStep = -1; MIRROR.oathShown = false; MIRROR.observedRound = 1;

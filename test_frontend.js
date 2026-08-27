@@ -152,14 +152,24 @@ check("oath sworn sets flag", S.oathSworn === true);
 check("oath card hidden after swear", els["oathCard"].classList.contains("hidden"));
 check("spin re-enabled after oath", els["spinBtn"].disabled === false);
 
-/* ---- 6. streaks ---- */
+/* ---- 6. streaks (v5.4: symmetric per-type counters) ---- */
 console.log("\n[streaks]");
-S.truthStreak = { Alex: 0, Sam: 0 };
+S.truthStreak = {}; S.typeStreak = { Alex: { t: 1, d: 0 }, Sam: { t: 0, d: 2 } };
+S.players = [{ name: "Alex", gender: "male" }, { name: "Sam", gender: "female" }];
 sandbox.window.renderStreaks();
 check("streak renders", els["streaks"].innerHTML.includes("Alex"));
-S.truthStreak.Alex = 2;
-sandbox.window.renderStreaks();
-check("forced streak shows DARE", els["streaks"].innerHTML.includes("DARE"));
+check("truth counter rendered", els["streaks"].innerHTML.includes("💜 1/2"));
+check("dare counter rendered", els["streaks"].innerHTML.includes("🔥 2/2"));
+check("streak-at-limit gets warn styling", els["streaks"].innerHTML.split("warn").length - 1 >= 1);
+/* legacy save-file migration: plain numbers in truthStreak still count */
+delete S.typeStreak.Bea;
+S.truthStreak = { Bea: 2 }; S.typeStreak = {}; S.players = [{ name: "Bea" }, { name: "Cy" }];
+check("legacy numeric streaks migrate into 💜 counter",
+  sandbox.window.myStreaks("Bea").t === 2);
+check("myStreaks exposes symmetric counters",
+  typeof sandbox.window.myStreaks === "function");
+check("forcedTruth string exists for symmetric rule",
+  sandbox.window.t("forcedTruth").includes("!") || sandbox.window.t("forcedTruth").length > 5);
 
 /* ---- 7. persistence ---- */
 console.log("\n[persistence]");

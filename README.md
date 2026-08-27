@@ -6,9 +6,22 @@ A private, mobile-first slow-burn truth-or-dare game for couples, powered by the
 **Full spec:** see [PRD.md](PRD.md).
 
 ## Features
-- **Spinning bottle** — lands on a random player.
+- **Spinning bottle** — deterministic physics-feel spin that visibly settles
+  toward the chosen player's side (±40° facing), with decaying tick sounds,
+  a subtle overshoot wobble, and a beat of suspense before the reveal.
+- **Loading while crafting** — a themed spinner + pulsing Cassia avatar with
+  rotating teasing lines whenever a challenge is generated; buttons lock so
+  nothing double-fires.
 - **Player choice** — the target picks 💜 Truth or 🔥 Dare.
-- **3-truth rule** — pick truth 2× in a row and the 3rd pick is forced to a dare.
+- **3-and-3 rule** — three truths in a row force a dare AND three dares in a
+  row force a truth; counters show 💜x/2 🔥x/2 per player.
+- **Slow-burn guardrail** — early rounds can't outrun their phase: rounds 1–2
+  cap effective heat at 3, rounds 3–4 at 5; after The Oath the dial rules.
+  Capped requests get a localized "pace held" toast.
+- **Phase journey dots** — five glowing dots track First Glance → No Secrets Left.
+- **Arabic voice mode** — Arabic has no Kokoro voice, so `ar` speech goes to
+  Microsoft Edge neural voices (`ar-SA-ZariyahNeural`, env-tunable) with
+  automatic Kokoro fallback; native-quality MSA from origin box and Vercel alike.
 - **Dirty-secrets truth engine** — researched, escalating truth questions that
   uncover each partner's deepest secrets and desires (patterns mined from real
   couple question banks: wafflejournal, lovifycouple, stephmorris, paired, forplay).
