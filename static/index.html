@@ -1167,7 +1167,10 @@ async function speak(text){
     lastAudioUrl = url;
     audioEl = new Audio(url);
     // release the blob once it has played — long sessions would otherwise leak
-    audioEl.addEventListener("ended", () => { try{ URL.revokeObjectURL(url); }catch(e){} });
+    audioEl.addEventListener("ended", () => {
+      try{ URL.revokeObjectURL(url); }catch(e){}
+      if(lastAudioUrl === url) lastAudioUrl = null;
+    });
     try{
       await audioEl.play();
     }catch(e){
