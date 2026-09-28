@@ -13,9 +13,9 @@ A private, mobile-first slow-burn truth-or-dare game for couples, powered by the
 - **Loading while crafting** — a themed spinner + pulsing Cassia avatar with
   rotating teasing lines whenever a challenge is generated; buttons lock so
   nothing double-fires.
-- **AI settings page** — use the server-configured OpenAI-compatible
-  chat-completions URL, auto-fetch that provider's models into a picker, and
-  keep the API key in Vercel environment variables instead of the browser.
+- **AI settings page** — Venice stays the default, hidden behind a settings
+  toggle; users can optionally enter their own OpenAI-compatible provider URL
+  + API key to fetch and pick a different model without exposing the server key.
 - **Player choice** — the target picks 💜 Truth or 🔥 Dare.
 - **3-and-3 rule** — three truths in a row force a dare AND three dares in a
   row force a truth; counters show 💜x/2 🔥x/2 per player.

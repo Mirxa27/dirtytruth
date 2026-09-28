@@ -52,6 +52,25 @@ def test_ai_models_rejects_untrusted_provider_url(client, monkeypatch):
     assert r.status_code == 400
     assert r.get_json()["error"] == "invalid provider url"
 
+def test_ai_models_allows_custom_provider_with_user_key(client, monkeypatch):
+    captured = {}
+    monkeypatch.setattr(appmod.socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("8.8.8.8", 443))])
+    def fake_request(method, url, headers=None, json_body=None, timeout=None):
+        captured.update(method=method, url=url, headers=headers)
+        return {"data": [{"id": "x-model"}]}
+    monkeypatch.setattr(appmod, "_pinned_json_request", fake_request)
+    r = client.post("/api/ai/models", json={
+        "url": "https://custom.example/v1/chat/completions",
+        "apiKey": "user-secret",
+        "model": "picked-model",
+    })
+    assert r.status_code == 200
+    d = r.get_json()
+    assert d["models"] == ["x-model"]
+    assert d["selected"] == "picked-model"
+    assert captured["url"] == "https://custom.example/v1/models"
+    assert captured["headers"]["Authorization"].startswith("Bearer ")
+
 def test_index_serves_html(client):
     r = client.get("/")
     assert r.status_code == 200
@@ -150,6 +169,22 @@ def test_generate_dare_llm(client, monkeypatch):
     assert len(d["steps"]) == 2
     assert all(s["seconds"] for s in d["steps"])
     assert captured["ai"]["model"] == "custom-model"
+
+def test_generate_uses_custom_provider_key(client, monkeypatch):
+    captured = {}
+    def fake_llm(payload, ai_settings=None, retries=3):
+        captured["ai"] = ai_settings
+        return json.dumps({"text": "Slow Embrace", "steps": [{"instruction": "Do this", "seconds": 30}, {"instruction": "Do that", "seconds": 20}]})
+    monkeypatch.setattr(appmod, "call_llm", fake_llm)
+    monkeypatch.setattr(appmod.socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("8.8.8.8", 443))])
+    r = client.post("/api/generate", json={
+        "chosen": "dare", "target": "Alex", "heat": 4,
+        "players": [{"name": "Alex"}, {"name": "Sam"}],
+        "ai": {"url": "https://custom.example/v1/chat/completions", "model": "custom-model", "apiKey": "user-secret"},
+    })
+    assert r.status_code == 200
+    assert captured["ai"]["url"] == "https://custom.example/v1/chat/completions"
+    assert captured["ai"]["api_key"] == "user-secret"
 
 def test_generate_truth_llm_collapses_to_question(client, monkeypatch):
     def fake_llm(payload, ai_settings=None, retries=3):
@@ -626,6 +661,18 @@ def test_get_ai_settings_ignores_same_host_different_path(monkeypatch):
     ai = appmod.get_ai_settings({"url": "https://api.venice.ai/other/v1/chat/completions", "model": "custom"})
     assert ai["url"] == base
     assert ai["model"] == "custom"
+
+def test_get_ai_settings_allows_custom_provider_with_user_key(monkeypatch):
+    monkeypatch.setattr(appmod.socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("8.8.8.8", 443))])
+    ai = appmod.get_ai_settings({
+        "url": "https://custom.example/v1/chat/completions",
+        "model": "custom",
+        "apiKey": "user-secret",
+    })
+    assert ai["url"] == "https://custom.example/v1/chat/completions"
+    assert ai["model"] == "custom"
+    assert ai["api_key"] == "user-secret"
+    assert ai["custom_key"] is True
 
 def test_pinned_json_request_uses_validated_address(monkeypatch):
     seen = {}

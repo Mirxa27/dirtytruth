@@ -29,6 +29,7 @@ function makeEl(id) {
       contains(c) { return this._set.has(c); },
     },
     addEventListener(type, fn) { (listeners[type] = listeners[type] || []).push(fn); },
+    setAttribute(name, value) { this[name] = value; },
     appendChild() {},
     querySelectorAll() { return []; },
     closest() { return null; },
@@ -177,7 +178,7 @@ check("forcedTruth string exists for symmetric rule",
 console.log("\n[persistence]");
 S.heat = 6; S.round = 7; S.oathSworn = true; S.ledger = { Alex: [{ reason: "x", amount: 100 }] };
 S.prefs = { Alex: { turnons: "feathers", fantasy: "", boundary: "no" } };
-S.ai = { providerUrl: "https://api.venice.ai/api/v1/chat/completions", model: "olafangensan-glm-4.7-flash-heretic", models: ["olafangensan-glm-4.7-flash-heretic"], apiKeyConfigured: true };
+S.ai = { providerUrl: "https://api.venice.ai/api/v1/chat/completions", model: "olafangensan-glm-4.7-flash-heretic", models: ["olafangensan-glm-4.7-flash-heretic"], apiKeyConfigured: true, apiKey: "", defaultProviderUrl: "https://api.venice.ai/api/v1/chat/completions", defaultModel: "olafangensan-glm-4.7-flash-heretic" };
 sandbox.window.saveState();
 const saved = JSON.parse(localStorageStub.getItem("dirtytruth_save_v1"));
 check("saveState persists oathSworn", saved.oathSworn === true);
@@ -190,15 +191,25 @@ check("loadState restores", loaded === true);
 check("loadState restores heat", S.heat === 6);
 check("loadState restores prefs", S.prefs.Alex.turnons === "feathers");
 check("loadState leaves ai settings untouched", S.ai.providerUrl.includes("venice.ai"));
-S.ai = { providerUrl: "https://example.com/v1/chat/completions", model: "fresh-model", models: ["fresh-model"], apiKeyConfigured: false };
+S.ai = { providerUrl: "https://example.com/v1/chat/completions", model: "fresh-model", models: ["fresh-model"], apiKeyConfigured: false, apiKey: "super-secret", defaultProviderUrl: "https://api.venice.ai/api/v1/chat/completions", defaultModel: "olafangensan-glm-4.7-flash-heretic" };
 sandbox.window.saveAiSettings();
-S.ai = { providerUrl: "", model: "", models: [], apiKeyConfigured: false };
+S.ai = { providerUrl: "", model: "", models: [], apiKeyConfigured: false, apiKey: "", defaultProviderUrl: "", defaultModel: "" };
 check("saveAiSettings uses dedicated key", JSON.parse(localStorageStub.getItem("dirtytruth_ai_v1")).model === "fresh-model");
 check("saveAiSettings does not persist model list", !("models" in JSON.parse(localStorageStub.getItem("dirtytruth_ai_v1"))));
+check("saveAiSettings does not persist api key", !("apiKey" in JSON.parse(localStorageStub.getItem("dirtytruth_ai_v1"))));
 check("loadAiSettings restores dedicated ai key", sandbox.window.loadAiSettings() === true && S.ai.model === "fresh-model");
 check("loadAiSettings clears stale model list", Array.isArray(S.ai.models) && S.ai.models.length === 0);
+check("loadAiSettings clears api key", S.ai.apiKey === "");
 check("normalizeAiProviderUrl canonicalizes shorthand paths", sandbox.window.normalizeAiProviderUrl("https://example.com/v1") === "https://example.com/v1/chat/completions");
 check("normalizeAiProviderUrl preserves explicit ports", sandbox.window.normalizeAiProviderUrl("https://example.com:8443/v1") === "https://example.com:8443/v1/chat/completions");
+S.ai.defaultProviderUrl = "https://api.venice.ai/api/v1/chat/completions";
+S.ai.defaultModel = "olafangensan-glm-4.7-flash-heretic";
+check("currentAiPayload falls back to default provider without custom key",
+  sandbox.window.currentAiPayload().url === "https://api.venice.ai/api/v1/chat/completions");
+els["aiSettingsToggle"].click();
+check("ai settings toggle reveals hidden panel", !els["aiCard"].classList.contains("hidden"));
+els["aiSettingsToggle"].click();
+check("ai settings toggle hides panel again", els["aiCard"].classList.contains("hidden"));
 
 /* ---- 8. esc ---- */
 check("esc escapes html", sandbox.window.esc('<b>"x"</b>') === "&lt;b&gt;&quot;x&quot;&lt;/b&gt;");

@@ -206,15 +206,27 @@ def _models_url_for(chat_url):
     return urlunparse((parsed.scheme, parsed.netloc, path, "", "", ""))
 
 
+def _clean_api_key(value):
+    """Opaque API key string supplied by the server config or the current user."""
+    return str(value or "").strip()[:500]
+
+
 def get_ai_settings(raw=None):
-    """Resolve request-scoped AI settings while keeping the API key server-side."""
-    raw = raw if isinstance(raw, dict) else {}
-    out = {"url": LLM_URL, "model": LLM_MODEL, "api_key": LLM_KEY}
+    """Resolve request-scoped AI settings, preferring a user key when supplied."""
+    raw = raw if hasattr(raw, "get") else {}
+    out = {"url": LLM_URL, "model": LLM_MODEL, "api_key": _clean_api_key(LLM_KEY), "custom_key": False}
+    user_key = _clean_api_key(raw.get("apiKey") or raw.get("api_key"))
+    raw_url = str(raw.get("url", "")).strip()
+    url_ok = not raw_url
     try:
-        if str(raw.get("url", "")).strip():
-            out["url"] = _trusted_llm_url(raw.get("url"))
+        if raw_url:
+            out["url"] = _normalize_llm_url(raw_url) if user_key else _trusted_llm_url(raw_url)
+            url_ok = True
     except ValueError:
         pass
+    if user_key and url_ok:
+        out["api_key"] = user_key
+        out["custom_key"] = True
     model = _clean_model_name(raw.get("model")) or out["model"]
     out["model"] = model
     return out
@@ -589,26 +601,31 @@ def ai_config():
     })
 
 
-@app.route("/api/ai/models")
+@app.route("/api/ai/models", methods=["GET", "POST"])
 def ai_models():
     if _rate_limited("/api/ai/models"):
         return _too_many()
+    raw = (request.get_json(force=True, silent=True) or {}) if request.method == "POST" else request.args
+    raw_url = str(raw.get("url", "")).strip() if hasattr(raw, "get") else ""
+    raw_key = _clean_api_key(raw.get("apiKey") or raw.get("api_key")) if hasattr(raw, "get") else ""
     try:
-        url = _trusted_llm_url(request.args.get("url") or LLM_URL)
+        if raw_url:
+            _normalize_llm_url(raw_url) if raw_key else _trusted_llm_url(raw_url)
     except ValueError:
         return jsonify({"error": "invalid provider url"}), 400
-    if not LLM_KEY:
-        return jsonify({"error": "LLM_KEY is not configured on the server"}), 503
-    headers = {"Authorization": "Bearer " + LLM_KEY, "Content-Type": "application/json"}
+    ai = get_ai_settings(raw)
+    if not ai["api_key"]:
+        return jsonify({"error": "API key is required for that provider", "apiKeyConfigured": False}), 503
+    headers = {"Authorization": "Bearer " + ai["api_key"], "Content-Type": "application/json"}
     try:
-        data = _pinned_json_request("GET", _models_url_for(url), headers=headers, timeout=30).get("data")
+        data = _pinned_json_request("GET", _models_url_for(ai["url"]), headers=headers, timeout=30).get("data")
         if not isinstance(data, list):
             raise RuntimeError("unexpected model response")
         models = sorted({
             _clean_model_name(item.get("id"))
             for item in data if isinstance(item, dict) and _clean_model_name(item.get("id"))
         })
-        return jsonify({"models": models, "selected": LLM_MODEL, "apiKeyConfigured": True})
+        return jsonify({"models": models, "selected": ai["model"], "apiKeyConfigured": True})
     except Exception:
         return jsonify({"error": "could not load provider models", "apiKeyConfigured": True}), 502
 
