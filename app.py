@@ -675,10 +675,8 @@ def tts():
     try:
         audio = tts_via_kokoro(text, voice)
         return audio, 200, {"Content-Type": "audio/mpeg", "Cache-Control": "no-store"}
-    except TTSTransportError:
+    except (TTSTransportError, TTSResponseError):
         pass
-    except TTSResponseError:
-        return jsonify({"error": "tts unavailable"}), 502
     audio = tts_via_edge(text, voice=edge_voice)
     if audio:
         return audio, 200, {"Content-Type": "audio/mpeg", "Cache-Control": "no-store"}

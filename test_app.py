@@ -643,14 +643,15 @@ def test_tts_http_error_falls_back_to_edge(client, monkeypatch):
     assert r.data == b"EDGE_MP3"
 
 
-def test_tts_empty_kokoro_audio_does_not_fall_back(client, monkeypatch):
+def test_tts_empty_kokoro_audio_falls_back(client, monkeypatch):
     class FakeResp:
         content = b""
         def raise_for_status(self): pass
     monkeypatch.setattr(appmod.requests, "post", lambda *a, **k: FakeResp())
     monkeypatch.setattr(appmod, "tts_via_edge", lambda *a, **k: b"EDGE_MP3")
     r = client.post("/api/tts", json={"text": "Hello"})
-    assert r.status_code == 502
+    assert r.status_code == 200
+    assert r.data == b"EDGE_MP3"
 
 def test_tts_truncates_long_text(client, monkeypatch):
     captured = {}
