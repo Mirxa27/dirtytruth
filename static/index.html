@@ -1316,9 +1316,6 @@ async function bootstrapAiSettings(){
     renderAiSettings();
     saveAiSettings();
     renderAiStatus(cfg.apiKeyConfigured ? t("aiStatusReady") : t("aiStatusMissingKey"), cfg.apiKeyConfigured ? "" : "warn");
-    if(state.ai.providerUrl && cfg.apiKeyConfigured && !(state.ai.models || []).length){
-      refreshAiModels().catch(()=>{});
-    }
   }catch(e){
     renderAiStatus(t("aiStatusLoadFail"), "warn");
   }

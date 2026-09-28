@@ -85,8 +85,8 @@ def _assert_public_host(host, port):
         addr = info[4][0]
         try:
             ip = ipaddress.ip_address(addr)
-        except ValueError:
-            continue
+        except ValueError as e:
+            raise ValueError("AI provider host is not allowed") from e
         if (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast
                 or ip.is_reserved or ip.is_unspecified):
             raise ValueError("AI provider host is not allowed")
