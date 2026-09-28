@@ -306,6 +306,11 @@ S.voice = true; els["voiceToggle"].classList.add("on");
 sandbox.handleVoiceLineIssue();
 check("line issue keeps voice enabled", S.voice === true && els["voiceToggle"].classList.contains("on"));
 check("line issue shows per-line notice", els["voiceNotice"].textContent === sandbox.t("voiceLineSkipped"));
+sandbox.window.setUiLang("es");
+sandbox.applyLang();
+check("voice notice re-renders in the selected language", els["voiceNotice"].textContent === sandbox.t("voiceLineSkipped"));
+sandbox.window.setUiLang("en");
+sandbox.applyLang();
 
 /* ---- 15. room mirror (v5.2): guests see challenges, steps, round ends ---- */
 console.log("\n[room mirror]");

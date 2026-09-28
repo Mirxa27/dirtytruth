@@ -937,6 +937,7 @@ function applyLang(){
   if(state.challenge) renderChallenge({silent:true});
   if(!state.oathSworn && state.round === OATH_ROUND) showOath(true);
   renderSetupSummary();
+  if(voiceNoticeKey) showVoiceNotice(voiceNoticeKey);
 }
 
 /* =========================================================================
@@ -1107,6 +1108,7 @@ function confettiLoop(){
    ========================================================================= */
 let audioEl = null, lastAudioUrl = null;
 let voiceIssueShown = false, voicePlayBlockedShown = false;
+let voiceNoticeKey = "";
 function setVoiceNotice(msg){
   const el = $("#voiceNotice"); if(!el) return;
   if(msg){
@@ -1117,27 +1119,31 @@ function setVoiceNotice(msg){
     el.classList.add("hidden");
   }
 }
+function showVoiceNotice(key){
+  voiceNoticeKey = key || "";
+  setVoiceNotice(voiceNoticeKey ? t(voiceNoticeKey) : "");
+}
 function handleVoiceFailure(){
   if(!state.voice) return;
   state.voice = false;
   const tgl = $("#voiceToggle"); if(tgl) tgl.classList.remove("on");
   saveState();
   renderSetupSummary();
-  setVoiceNotice(t("voiceUnavailableNotice"));
+  showVoiceNotice("voiceUnavailableNotice");
   if(!voiceIssueShown){
     voiceIssueShown = true;
     toast(t("voiceUnavailableNotice"));
   }
 }
 function handleVoicePlaybackBlocked(){
-  setVoiceNotice(t("voicePlaybackBlocked"));
+  showVoiceNotice("voicePlaybackBlocked");
   if(!voicePlayBlockedShown){
     voicePlayBlockedShown = true;
     toast(t("voicePlaybackBlocked"));
   }
 }
 function handleVoiceLineIssue(){
-  setVoiceNotice(t("voiceLineSkipped"));
+  showVoiceNotice("voiceLineSkipped");
   toast(t("voiceLineSkipped"));
 }
 async function speak(text){
@@ -1145,7 +1151,7 @@ async function speak(text){
   try{
     const r = await fetch("/api/tts", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({text, lang: uiLang})});
     if(!r.ok){
-      if(r.status >= 500 || r.status === 429){ handleVoiceFailure(); }
+      if(r.status >= 500){ handleVoiceFailure(); }
       else { handleVoiceLineIssue(); }
       return;
     }
@@ -1165,7 +1171,7 @@ async function speak(text){
     }
     voiceIssueShown = false;
     voicePlayBlockedShown = false;
-    setVoiceNotice("");
+    showVoiceNotice("");
   }catch(e){ handleVoiceFailure(); }
 }
 
@@ -1990,7 +1996,8 @@ async function generateChallenge(chosen){
     players: state.players, chosen, target: state.target.name,
     heat: state.heat, round: state.round, recent: state.recent,
     avoid: state.seen,
-    lang: uiLang, prefs: state.prefs,
+    lang: uiLang, prefs: state.prefs, mode: state.mode,
+    autoEscalate: state.autoEscalate,
   };
   let d;
   try{
@@ -2333,7 +2340,7 @@ $("#voiceToggle").addEventListener("click", () => {
   state.voice = !state.voice;
   if(state.voice) voiceIssueShown = false;
   voicePlayBlockedShown = false;
-  setVoiceNotice("");
+  showVoiceNotice("");
   $("#voiceToggle").classList.toggle("on", state.voice);
   saveState();
   renderSetupSummary();
