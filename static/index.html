@@ -1174,7 +1174,6 @@ async function speak(text){
       handleVoicePlaybackBlocked();
       return;
     }
-    voiceIssueShown = false;
     voicePlayBlockedShown = false;
     showVoiceNotice("");
   }catch(e){ handleVoiceLineIssue(); }
