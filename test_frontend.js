@@ -113,6 +113,7 @@ check("OATH_ROUND = 5", sandbox.window.OATH_ROUND === 5);
 check("state has prefs", "prefs" in S);
 check("state has mode", S.mode === "solo");
 check("state has roomCode", "roomCode" in S);
+check("state has ai settings", !!S.ai && typeof S.ai === "object");
 
 /* ---- 3. phases (mystery) ---- */
 console.log("\n[phases]");
@@ -176,16 +177,19 @@ check("forcedTruth string exists for symmetric rule",
 console.log("\n[persistence]");
 S.heat = 6; S.round = 7; S.oathSworn = true; S.ledger = { Alex: [{ reason: "x", amount: 100 }] };
 S.prefs = { Alex: { turnons: "feathers", fantasy: "", boundary: "no" } };
+S.ai = { providerUrl: "https://api.venice.ai/api/v1/chat/completions", model: "olafangensan-glm-4.7-flash-heretic", models: ["olafangensan-glm-4.7-flash-heretic"], apiKeyConfigured: true };
 sandbox.window.saveState();
 const saved = JSON.parse(localStorageStub.getItem("dirtytruth_save_v1"));
 check("saveState persists oathSworn", saved.oathSworn === true);
 check("saveState persists ledger", saved.ledger.Alex.length === 1);
 check("saveState persists prefs", saved.prefs.Alex.turnons === "feathers");
 check("saveState persists mode", saved.mode === "solo");
+check("saveState persists ai settings", saved.ai.model === "olafangensan-glm-4.7-flash-heretic");
 const loaded = sandbox.window.loadState();
 check("loadState restores", loaded === true);
 check("loadState restores heat", S.heat === 6);
 check("loadState restores prefs", S.prefs.Alex.turnons === "feathers");
+check("loadState restores ai settings", S.ai.providerUrl.includes("venice.ai"));
 
 /* ---- 8. esc ---- */
 check("esc escapes html", sandbox.window.esc('<b>"x"</b>') === "&lt;b&gt;&quot;x&quot;&lt;/b&gt;");

@@ -198,6 +198,11 @@
   textarea:focus{border-color:var(--purple)}
   .linkrow{display:flex;gap:8px;margin-top:12px}
   .linkrow input{flex:1;font-size:.85rem;opacity:.92;padding:10px 12px}
+  .stack{display:flex;gap:8px;align-items:center}
+  .muted-note{font-size:.75rem;color:var(--dim);line-height:1.45}
+  .statusline{font-size:.78rem;color:var(--dim);margin-top:8px;line-height:1.4}
+  .statusline.ok{color:#8ff1b8}
+  .statusline.warn{color:#fbbf24}
 
   /* entrance animation */
   .card.enter{animation:enter .4s ease}
@@ -236,6 +241,22 @@
       <span style="font-size:1.1rem">🌍</span>
       <select id="langSelect" style="flex:1"></select>
     </div>
+  </div>
+
+  <div class="card" id="aiCard" style="padding:14px">
+    <div style="font-weight:800;font-size:.98rem" data-i18n="aiSettingsTitle">AI settings</div>
+    <div class="muted-note" data-i18n="aiSettingsSub" style="margin:6px 0 12px">Use any OpenAI-compatible provider URL. The API key stays on the server/Vercel env.</div>
+    <label data-i18n="aiProviderLabel">Provider URL</label>
+    <input type="url" id="aiProviderUrl" placeholder="https://api.venice.ai/api/v1/chat/completions">
+    <div class="row" style="margin-top:10px;align-items:end">
+      <div style="flex:1">
+        <label data-i18n="aiModelLabel">Model</label>
+        <select id="aiModelSelect"></select>
+      </div>
+      <button class="btn btn-ghost" id="aiRefreshModelsBtn" style="width:auto;padding:0 16px;font-size:.85rem" data-i18n="aiFetchModels">↻ Fetch models</button>
+    </div>
+    <div class="statusline" id="aiSettingsStatus" data-i18n="aiStatusReady">Using the saved provider and model for every AI request.</div>
+    <div class="muted-note" data-i18n="aiSettingsNote" style="margin-top:8px">Add <b>LLM_KEY</b> in Vercel Environment Variables. URL/model can be changed here without exposing the key in the browser.</div>
   </div>
 
   <!-- SETUP -->
@@ -433,6 +454,12 @@ const I18N = {
   en: {
     rtl: false,
     appTitle:"🐴 Dirty Truth & Dare 🔥", tagline:"A slow-burn game of secrets, dares & desire",
+    aiSettingsTitle:"AI settings", aiSettingsSub:"Use any OpenAI-compatible provider URL. The API key stays on the server/Vercel env.",
+    aiProviderLabel:"Provider URL", aiModelLabel:"Model", aiFetchModels:"↻ Fetch models",
+    aiSettingsNote:"Add LLM_KEY in Vercel Environment Variables. URL/model can be changed here without exposing the key in the browser.",
+    aiStatusReady:"Using the saved provider and model for every AI request.", aiStatusLoading:"Loading available models…",
+    aiStatusLoaded:"Loaded {n} models.", aiStatusSaved:"AI settings saved.", aiStatusMissingKey:"Add LLM_KEY in Vercel before fetching provider models.",
+    aiStatusLoadFail:"Could not load models from that provider.", aiStatusInvalidUrl:"Enter a public HTTPS OpenAI-compatible URL.",
     player1:"Player 1", player2:"Player 2", gender:"Gender", male:"Male", female:"Female", partner:"Partner",
     playMode:"Play mode", solo:"📱 Solo", twoDevices:"📲 Two devices",
     hostHint:"You'll create a room and share the code with your partner.",
@@ -930,6 +957,7 @@ const state = {
   roomVersion: 0,
   roomPoll: null,
   guestJoined: false,
+  ai: { providerUrl: "", model: "", models: [], apiKeyConfigured: false },
 };
 const TRUTH_LIMIT = 3;
 const PENALTY = 100;
@@ -1174,6 +1202,7 @@ function updateHeatLabel(){
    Persistence
    ========================================================================= */
 const SAVE_KEY = "dirtytruth_save_v1";
+const AI_SAVE_KEY = "dirtytruth_ai_v1";
 function saveState(){
   try{
     localStorage.setItem(SAVE_KEY, JSON.stringify({
@@ -1182,7 +1211,7 @@ function saveState(){
       voice: state.voice, autoEscalate: state.autoEscalate,
       oathSworn: state.oathSworn, ledger: state.ledger, prefs: state.prefs,
       mode: state.mode, roomCode: state.roomCode, role: state.role,
-      seen: state.seen, answers: state.answers,
+      seen: state.seen, answers: state.answers, ai: state.ai,
     }));
   }catch(e){}
 }
@@ -1200,8 +1229,110 @@ function loadState(){
     state.role = s.role || null;
     state.seen = Array.isArray(s.seen) ? s.seen.slice(-80) : [];
     state.answers = (s.answers && typeof s.answers === "object") ? s.answers : {};
+    if(s.ai && typeof s.ai === "object") state.ai = Object.assign(state.ai, s.ai);
     return true;
   }catch(e){ return false; }
+}
+
+function saveAiSettings(){
+  try{
+    localStorage.setItem(AI_SAVE_KEY, JSON.stringify({
+      providerUrl: state.ai.providerUrl,
+      model: state.ai.model,
+      models: state.ai.models,
+      apiKeyConfigured: state.ai.apiKeyConfigured,
+    }));
+  }catch(e){}
+}
+function loadAiSettings(){
+  try{
+    const raw = localStorage.getItem(AI_SAVE_KEY); if(!raw) return false;
+    const s = JSON.parse(raw) || {};
+    state.ai = Object.assign(state.ai, {
+      providerUrl: s.providerUrl || state.ai.providerUrl,
+      model: s.model || state.ai.model,
+      models: Array.isArray(s.models) ? s.models.slice(0, 200) : state.ai.models,
+      apiKeyConfigured: s.apiKeyConfigured === true,
+    });
+    return true;
+  }catch(e){ return false; }
+}
+function renderAiStatus(message, tone){
+  const el = $("#aiSettingsStatus"); if(!el) return;
+  el.textContent = message || "";
+  el.className = "statusline" + (tone ? " " + tone : "");
+}
+function renderAiModelOptions(){
+  const sel = $("#aiModelSelect"); if(!sel) return;
+  const models = Array.from(new Set((state.ai.models || []).filter(Boolean)));
+  const current = (state.ai.model || "").trim();
+  if(current && !models.includes(current)) models.unshift(current);
+  if(!models.length) models.push(current || "");
+  sel.innerHTML = models.map(m => `<option value="${esc(m)}">${esc(m || "—")}</option>`).join("");
+  sel.value = current || models[0] || "";
+}
+function renderAiSettings(){
+  const url = $("#aiProviderUrl"); if(url && url.value !== state.ai.providerUrl) url.value = state.ai.providerUrl || "";
+  renderAiModelOptions();
+}
+function currentAiPayload(){
+  return { url: state.ai.providerUrl, model: state.ai.model };
+}
+async function refreshAiModels(opts){
+  opts = opts || {};
+  const field = $("#aiProviderUrl");
+  const url = ((field && field.value) || state.ai.providerUrl || "").trim();
+  if(!/^https:\/\//i.test(url)){
+    renderAiStatus(t("aiStatusInvalidUrl"), "warn");
+    return;
+  }
+  state.ai.providerUrl = url;
+  saveAiSettings();
+  renderAiStatus(t("aiStatusLoading"));
+  try{
+    const d = await api(`/api/ai/models?url=${encodeURIComponent(url)}`, null, "GET", 30000);
+    state.ai.models = Array.isArray(d.models) ? d.models.slice(0, 200) : [];
+    state.ai.apiKeyConfigured = d.apiKeyConfigured !== false;
+    if((!state.ai.model || !state.ai.models.includes(state.ai.model)) && state.ai.models.length){
+      state.ai.model = state.ai.models[0];
+    }
+    renderAiSettings();
+    saveAiSettings();
+    renderAiStatus(t("aiStatusLoaded", {n: state.ai.models.length || 0}), "ok");
+  }catch(e){
+    renderAiStatus(state.ai.apiKeyConfigured ? t("aiStatusLoadFail") : t("aiStatusMissingKey"), "warn");
+  }
+}
+async function bootstrapAiSettings(){
+  loadAiSettings();
+  renderAiSettings();
+  try{
+    const cfg = await api("/api/ai/config", null, "GET", 15000);
+    state.ai.providerUrl = state.ai.providerUrl || cfg.provider_url || "";
+    state.ai.model = state.ai.model || cfg.model || "";
+    state.ai.apiKeyConfigured = !!cfg.apiKeyConfigured;
+    renderAiSettings();
+    saveAiSettings();
+    renderAiStatus(cfg.apiKeyConfigured ? t("aiStatusReady") : t("aiStatusMissingKey"), cfg.apiKeyConfigured ? "" : "warn");
+    if(state.ai.providerUrl && cfg.apiKeyConfigured && !(state.ai.models || []).length){
+      refreshAiModels().catch(()=>{});
+    }
+  }catch(e){
+    renderAiStatus(t("aiStatusLoadFail"), "warn");
+  }
+}
+function bindAiSettings(){
+  $("#aiRefreshModelsBtn").addEventListener("click", () => { refreshAiModels().catch(()=>{}); });
+  $("#aiProviderUrl").addEventListener("change", () => {
+    state.ai.providerUrl = $("#aiProviderUrl").value.trim();
+    saveAiSettings();
+    refreshAiModels().catch(()=>{});
+  });
+  $("#aiModelSelect").addEventListener("change", () => {
+    state.ai.model = $("#aiModelSelect").value.trim();
+    saveAiSettings();
+    renderAiStatus(t("aiStatusSaved"));
+  });
 }
 
 /* =========================================================================
@@ -1697,6 +1828,7 @@ async function generateChallenge(chosen){
   };
   let d;
   try{
+    body.ai = currentAiPayload();
     d = await api("/api/generate", body);
   }catch(e){
     d = {type: chosen, title: "…", steps: [{instruction: t("netFail"), seconds: 10}], engine: "error"};
@@ -2000,7 +2132,7 @@ async function sendChat(){
   typing.className = "msg cassia typing"; typing.textContent = "…";
   $("#chatLog").appendChild(typing);
   try{
-    const d = await api("/api/chat", {message: msg, players: state.players, target: state.target?state.target.name:null, heat: state.heat, recent: state.recent, lang: uiLang}, "POST", 30000);
+    const d = await api("/api/chat", {message: msg, players: state.players, target: state.target?state.target.name:null, heat: state.heat, recent: state.recent, lang: uiLang, ai: currentAiPayload()}, "POST", 30000);
     typing.remove();
     addChat("cassia", d.reply);
     if(d.heat){
@@ -2093,9 +2225,12 @@ window.showOath = showOath;
 window.saveState = saveState;
 window.loadState = loadState;
 window.applyLang = applyLang;
+window.refreshAiModels = refreshAiModels;
 
 buildLangSelect();
+bindAiSettings();
 applyLang();
+bootstrapAiSettings().catch(()=>{});
 async function enterGameUI(resumeRoomText){
   $("#setupCard").classList.add("hidden");
   $("#gameUI").classList.remove("hidden");

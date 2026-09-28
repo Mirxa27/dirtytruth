@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Shared game logic for Dirty Truth & Dare — pure functions, fully testable."""
+import random
 
 TRUTH_LIMIT = 3  # N same-type picks in a row -> the next pick is forced to the other type
 PENALTY_AMOUNT = 100  # dollars owed per skipped / not-performed task
@@ -528,14 +529,17 @@ def fallback_challenge(chosen, heat, target, partner, recent_titles, avoid=None)
     # dares
     pool = FALLBACK_DARES
     candidates = _tier_candidates(tier)
+    fresh = []
     for t in candidates:
         for title, steps in pool.get(t, []):
             if blocked_out(title):
                 continue
             out = [{"instruction": i, "seconds": max(5, min(180, int(s)))} for i, s in steps]
             if out:
-                return title, out
-    title, steps = pool[tier][0]
+                fresh.append((title, out))
+    if fresh:
+        return random.choice(fresh)
+    title, steps = random.choice(pool[tier])
     return title, [{"instruction": i, "seconds": max(5, min(180, int(s)))} for i, s in steps]
 
 
