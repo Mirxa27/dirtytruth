@@ -1106,7 +1106,7 @@ function confettiLoop(){
    TTS
    ========================================================================= */
 let audioEl = null, lastAudioUrl = null;
-let voiceIssueShown = false;
+let voiceIssueShown = false, voicePlayBlockedShown = false;
 function setVoiceNotice(msg){
   const el = $("#voiceNotice"); if(!el) return;
   if(msg){
@@ -1129,6 +1129,13 @@ function handleVoiceFailure(){
     toast("🎙️ Voice unavailable — continuing silently.");
   }
 }
+function handleVoicePlaybackBlocked(){
+  setVoiceNotice("🎙️ Tap once more to allow voice playback.");
+  if(!voicePlayBlockedShown){
+    voicePlayBlockedShown = true;
+    toast("🎙️ Tap once more to allow voice playback.");
+  }
+}
 async function speak(text){
   if(!state.voice || !text) return;
   try{
@@ -1142,8 +1149,14 @@ async function speak(text){
     audioEl = new Audio(url);
     // release the blob once it has played — long sessions would otherwise leak
     audioEl.addEventListener("ended", () => { try{ URL.revokeObjectURL(url); }catch(e){} });
-    await audioEl.play();
+    try{
+      await audioEl.play();
+    }catch(e){
+      handleVoicePlaybackBlocked();
+      return;
+    }
     voiceIssueShown = false;
+    voicePlayBlockedShown = false;
     setVoiceNotice("");
   }catch(e){ handleVoiceFailure(); }
 }
@@ -2310,12 +2323,9 @@ $("#chatInput").addEventListener("keydown", e => { if(e.key === "Enter") sendCha
    ========================================================================= */
 $("#voiceToggle").addEventListener("click", () => {
   state.voice = !state.voice;
-  if(state.voice){
-    voiceIssueShown = false;
-    setVoiceNotice("");
-  } else {
-    setVoiceNotice("");
-  }
+  if(state.voice) voiceIssueShown = false;
+  voicePlayBlockedShown = false;
+  setVoiceNotice("");
   $("#voiceToggle").classList.toggle("on", state.voice);
   saveState();
   renderSetupSummary();
