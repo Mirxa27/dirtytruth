@@ -1151,7 +1151,13 @@ async function speak(text){
   try{
     const r = await fetch("/api/tts", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({text, lang: uiLang})});
     if(!r.ok){
-      handleVoiceLineIssue();
+      let err = "";
+      try{
+        const d = await r.json();
+        err = String((d && d.error) || "").toLowerCase();
+      }catch(e){}
+      if(r.status === 400 && err.includes("invalid voice")) handleVoiceFailure();
+      else handleVoiceLineIssue();
       return;
     }
     const blob = await r.blob();
