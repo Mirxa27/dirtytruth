@@ -982,16 +982,46 @@ window.esc = esc;
 /* =========================================================================
    Sound (WebAudio SFX)
    ========================================================================= */
-let AC = null;
-function ac(){ if(!AC){ try{ AC = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return AC; }
+let AC = null, sfxDisabled = false;
+function disableSfx(){
+  sfxDisabled = true;
+  try{
+    if(AC && typeof AC.close === "function") AC.close();
+  }catch(e){}
+  AC = null;
+}
+function ac(){
+  if(sfxDisabled) return null;
+  if(!AC){
+    try{
+      AC = new (window.AudioContext||window.webkitAudioContext)();
+      if(AC && typeof AC.addEventListener === "function"){
+        AC.addEventListener("statechange", () => {
+          if(AC && AC.state === "closed") disableSfx();
+        });
+      }
+    }catch(e){
+      disableSfx();
+    }
+  }
+  return AC;
+}
 function beep(freq, dur, type="sine", vol=0.15){
   const c = ac(); if(!c) return;
-  const o = c.createOscillator(), g = c.createGain();
-  o.type = type; o.frequency.value = freq;
-  g.gain.setValueAtTime(vol, c.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
-  o.connect(g); g.connect(c.destination);
-  o.start(); o.stop(c.currentTime + dur);
+  try{
+    if(c.state === "suspended" && typeof c.resume === "function" &&
+       (!navigator.userActivation || navigator.userActivation.hasBeenActive)){
+      c.resume().catch(()=>{});
+    }
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
+    o.connect(g); g.connect(c.destination);
+    o.start(); o.stop(c.currentTime + dur);
+  }catch(e){
+    disableSfx();
+  }
 }
 const SFX = {
   spin(){ beep(220,0.08,"sawtooth",0.08); setTimeout(()=>beep(330,0.08,"sawtooth",0.08),90); setTimeout(()=>beep(440,0.1,"sawtooth",0.08),180); },

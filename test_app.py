@@ -589,8 +589,28 @@ def test_tts_upstream_failure(client, monkeypatch):
     def fake_post(url, headers=None, json=None, timeout=None):
         raise RuntimeError("tts down")
     monkeypatch.setattr(appmod.requests, "post", fake_post)
+    monkeypatch.setattr(appmod, "tts_via_edge", lambda *a, **k: None)
     r = client.post("/api/tts", json={"text": "Hello"})
     assert r.status_code == 502
+
+
+def test_tts_falls_back_to_edge_when_kokoro_fails(client, monkeypatch):
+    from languages import edge_tts_voice
+    def fake_post(url, headers=None, json=None, timeout=None):
+        raise RuntimeError("kokoro down")
+    captured = {}
+    def fake_edge(text, voice=None):
+        captured["text"] = text
+        captured["voice"] = voice
+        return b"EDGE_MP3"
+    monkeypatch.setattr(appmod.requests, "post", fake_post)
+    monkeypatch.setattr(appmod, "tts_via_edge", fake_edge)
+    r = client.post("/api/tts", json={"text": "Hola", "lang": "es"})
+    assert r.status_code == 200
+    assert r.content_type == "audio/mpeg"
+    assert r.data == b"EDGE_MP3"
+    assert captured["text"] == "Hola"
+    assert captured["voice"] == edge_tts_voice("es")
 
 def test_tts_truncates_long_text(client, monkeypatch):
     captured = {}

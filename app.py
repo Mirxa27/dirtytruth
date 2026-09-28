@@ -29,7 +29,7 @@ from game_logic import (
     normalize_key,
 )
 import random
-from languages import LANGUAGES, get_lang, language_directive, tts_voice
+from languages import LANGUAGES, get_lang, language_directive, tts_voice, edge_tts_voice
 import rooms
 
 
@@ -257,6 +257,18 @@ def tts_via_edge(text, voice=None):
         return asyncio.run(_guarded())
     except Exception:
         return None
+
+
+def tts_via_kokoro(text, voice):
+    """Synthesize `text` with Kokoro; returns MP3 bytes or raises on failure."""
+    r = requests.post(
+        TTS_URL,
+        headers={"Authorization": "******", "Content-Type": "application/json"},
+        json={"model": "kokoro", "voice": voice, "input": text},
+        timeout=60,
+    )
+    r.raise_for_status()
+    return r.content
 
 
 # ---------------------------------------------------------------------------
@@ -640,22 +652,22 @@ def tts():
         return jsonify({"error": "empty text"}), 400
     lang = get_lang(data.get("lang", "en"))
     voice = str(data.get("voice", ""))[:20] or tts_voice(lang["code"])
+    edge_voice = edge_tts_voice(lang["code"])
     # Arabic has no Kokoro voice — go straight to Edge neural speech
     if lang["code"] == "ar":
-        audio = tts_via_edge(text)
+        audio = tts_via_edge(text, voice=edge_voice)
         if audio:
             return audio, 200, {"Content-Type": "audio/mpeg", "Cache-Control": "no-store"}
+    kokoro_error = None
     try:
-        r = requests.post(
-            TTS_URL,
-            headers={"Authorization": "Bearer x", "Content-Type": "application/json"},
-            json={"model": "kokoro", "voice": voice, "input": text},
-            timeout=60,
-        )
-        r.raise_for_status()
-        return r.content, 200, {"Content-Type": "audio/mpeg", "Cache-Control": "no-store"}
+        audio = tts_via_kokoro(text, voice)
+        return audio, 200, {"Content-Type": "audio/mpeg", "Cache-Control": "no-store"}
     except Exception as e:
-        return jsonify({"error": str(e)[:200]}), 502
+        kokoro_error = e
+    audio = tts_via_edge(text, voice=edge_voice)
+    if audio:
+        return audio, 200, {"Content-Type": "audio/mpeg", "Cache-Control": "no-store"}
+    return jsonify({"error": str(kokoro_error)[:200]}), 502
 
 
 @app.route("/api/languages")

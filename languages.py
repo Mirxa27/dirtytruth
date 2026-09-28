@@ -14,6 +14,7 @@ LANGUAGES = {
         "native": "English",
         "bcp47": "en",
         "voice": "af_heart",
+        "edge_voice": "en-US-JennyNeural",
         "rtl": False,
         "example": "",
     },
@@ -22,6 +23,7 @@ LANGUAGES = {
         "native": "Español",
         "bcp47": "es",
         "voice": "ef_dora",
+        "edge_voice": "es-ES-ElviraNeural",
         "rtl": False,
         "example": "Acércate lentamente y susurra al oído de tu pareja: «me perteneces»",
     },
@@ -30,6 +32,7 @@ LANGUAGES = {
         "native": "Français",
         "bcp47": "fr",
         "voice": "ff_siwis",
+        "edge_voice": "fr-FR-DeniseNeural",
         "rtl": False,
         "example": "Approche-toi lentement et murmure à l'oreille de ton partenaire : « je t'appartiens »",
     },
@@ -38,6 +41,7 @@ LANGUAGES = {
         "native": "Deutsch",
         "bcp47": "de",
         "voice": "hf_alpha",
+        "edge_voice": "de-DE-KatjaNeural",
         "rtl": False,
         "example": "Komm langsam näher und flüstere deinem Partner ins Ohr: „Du gehörst mir“",
     },
@@ -46,6 +50,7 @@ LANGUAGES = {
         "native": "Italiano",
         "bcp47": "it",
         "voice": "if_sara",
+        "edge_voice": "it-IT-ElsaNeural",
         "rtl": False,
         "example": "Avvicinati lentamente e sussurra all'orecchio del tuo partner: «sei mio»",
     },
@@ -54,6 +59,7 @@ LANGUAGES = {
         "native": "Português",
         "bcp47": "pt",
         "voice": "pf_dora",
+        "edge_voice": "pt-BR-FranciscaNeural",
         "rtl": False,
         "example": "Aproxime-se lentamente e sussurre no ouvido do seu parceiro: «você é meu»",
     },
@@ -62,6 +68,7 @@ LANGUAGES = {
         "native": "हिन्दी",
         "bcp47": "hi",
         "voice": "hf_alpha",  # closest available (Hindi not in Kokoro set)
+        "edge_voice": "hi-IN-SwaraNeural",
         "rtl": False,
         "example": "धीरे से पास आओ और अपने साथी के कान में फुसफुसाओ: \"तुम मेरे हो\"",
     },
@@ -70,6 +77,7 @@ LANGUAGES = {
         "native": "日本語",
         "bcp47": "ja",
         "voice": "jf_alpha",
+        "edge_voice": "ja-JP-NanamiNeural",
         "rtl": False,
         "example": "ゆっくりと近づき、パートナーの耳元で囁いてください：「あなたは私のもの」",
     },
@@ -78,6 +86,7 @@ LANGUAGES = {
         "native": "中文",
         "bcp47": "zh",
         "voice": "zf_xiaoni",
+        "edge_voice": "zh-CN-XiaoxiaoNeural",
         "rtl": False,
         "example": "慢慢靠近，在你伴侣耳边低语：\"你是我的\"",
     },
@@ -86,6 +95,7 @@ LANGUAGES = {
         "native": "العربية",
         "bcp47": "ar",
         "voice": "hf_alpha",  # closest available (Arabic not in Kokoro set)
+        "edge_voice": "ar-SA-ZariyahNeural",
         "rtl": True,
         "example": "اقترب ببطء وهمس في أذن شريكك: \"أنت ملكي\"",
     },
@@ -126,6 +136,11 @@ def language_directive(code):
 def tts_voice(code):
     """Kokoro voice for a language code."""
     return get_lang(code)["voice"]
+
+
+def edge_tts_voice(code):
+    """Edge neural voice for a language code."""
+    return get_lang(code)["edge_voice"]
 
 
 def is_rtl(code):
