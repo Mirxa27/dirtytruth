@@ -82,6 +82,10 @@ class TTSResponseError(RuntimeError):
     """Raised when an upstream TTS provider returns unusable audio."""
 
 
+class TTSClientError(RuntimeError):
+    """Raised when a client-supplied TTS option is rejected upstream."""
+
+
 def _resolve_public_host(host, port):
     """Resolve `host` and return only globally-routable addresses."""
     try:
@@ -277,6 +281,11 @@ def tts_via_kokoro(text, voice):
             timeout=60,
         )
         r.raise_for_status()
+    except requests.HTTPError as e:
+        status = getattr(getattr(e, "response", None), "status_code", None) or getattr(locals().get("r"), "status_code", None)
+        if status is not None and 400 <= int(status) < 500:
+            raise TTSClientError("kokoro rejected the request") from e
+        raise TTSTransportError("kokoro unavailable") from e
     except requests.RequestException as e:
         raise TTSTransportError("kokoro unavailable") from e
     audio = getattr(r, "content", b"") or b""
@@ -677,6 +686,8 @@ def tts():
         return audio, 200, {"Content-Type": "audio/mpeg", "Cache-Control": "no-store"}
     except (TTSTransportError, TTSResponseError):
         pass
+    except TTSClientError:
+        return jsonify({"error": "tts unavailable"}), 502
     audio = tts_via_edge(text, voice=edge_voice)
     if audio:
         return audio, 200, {"Content-Type": "audio/mpeg", "Cache-Control": "no-store"}

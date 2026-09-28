@@ -634,13 +634,29 @@ def test_tts_fallback_reuses_explicit_edge_voice(client, monkeypatch):
 
 def test_tts_http_error_falls_back_to_edge(client, monkeypatch):
     class FakeResp:
+        status_code = 502
         def raise_for_status(self):
-            raise appmod.requests.HTTPError("bad gateway")
+            err = appmod.requests.HTTPError("bad gateway")
+            err.response = self
+            raise err
     monkeypatch.setattr(appmod.requests, "post", lambda *a, **k: FakeResp())
     monkeypatch.setattr(appmod, "tts_via_edge", lambda *a, **k: b"EDGE_MP3")
     r = client.post("/api/tts", json={"text": "Hello"})
     assert r.status_code == 200
     assert r.data == b"EDGE_MP3"
+
+
+def test_tts_client_error_does_not_fall_back(client, monkeypatch):
+    class FakeResp:
+        status_code = 400
+        def raise_for_status(self):
+            err = appmod.requests.HTTPError("bad request")
+            err.response = self
+            raise err
+    monkeypatch.setattr(appmod.requests, "post", lambda *a, **k: FakeResp())
+    monkeypatch.setattr(appmod, "tts_via_edge", lambda *a, **k: b"EDGE_MP3")
+    r = client.post("/api/tts", json={"text": "Hello", "voice": "bad_voice"})
+    assert r.status_code == 502
 
 
 def test_tts_empty_kokoro_audio_falls_back(client, monkeypatch):
