@@ -197,7 +197,7 @@ check("saveAiSettings uses dedicated key", JSON.parse(localStorageStub.getItem("
 check("saveAiSettings does not persist model list", !("models" in JSON.parse(localStorageStub.getItem("dirtytruth_ai_v1"))));
 check("loadAiSettings restores dedicated ai key", sandbox.window.loadAiSettings() === true && S.ai.model === "fresh-model");
 check("loadAiSettings clears stale model list", Array.isArray(S.ai.models) && S.ai.models.length === 0);
-check("aiProviderOrigin ignores path differences", sandbox.window.aiProviderOrigin("https://example.com/v1/chat/completions") === "https://example.com");
+check("normalizeAiProviderUrl canonicalizes shorthand paths", sandbox.window.normalizeAiProviderUrl("https://example.com/v1") === "https://example.com/v1/chat/completions");
 
 /* ---- 8. esc ---- */
 check("esc escapes html", sandbox.window.esc('<b>"x"</b>') === "&lt;b&gt;&quot;x&quot;&lt;/b&gt;");

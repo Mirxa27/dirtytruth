@@ -103,14 +103,9 @@ def _assert_public_host(host, port):
 
 
 def _trusted_llm_url(value):
-    """Allow request-scoped overrides only for the configured provider origin."""
+    """Allow request-scoped overrides only for the configured provider URL."""
     normalized = _normalize_llm_url(value)
-    parsed = urlparse(normalized)
-    base = urlparse(LLM_URL)
-    if (
-        (parsed.hostname or "").lower() != (base.hostname or "").lower()
-        or (parsed.port or 443) != (base.port or 443)
-    ):
+    if normalized != _normalize_llm_url(LLM_URL):
         raise ValueError("AI provider host is not allowed")
     return normalized
 

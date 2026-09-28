@@ -245,7 +245,7 @@
 
   <div class="card" id="aiCard" style="padding:14px">
     <div style="font-weight:800;font-size:.98rem" data-i18n="aiSettingsTitle">AI settings</div>
-    <div class="muted-note" data-i18n="aiSettingsSub" style="margin:6px 0 12px">Use any OpenAI-compatible provider URL. The API key stays on the server/Vercel env.</div>
+    <div class="muted-note" data-i18n="aiSettingsSub" style="margin:6px 0 12px">Use the configured HTTPS provider URL. The API key stays on the server/Vercel env.</div>
     <label data-i18n="aiProviderLabel">Provider URL</label>
     <input type="url" id="aiProviderUrl" placeholder="https://api.venice.ai/api/v1/chat/completions">
     <div class="row" style="margin-top:10px;align-items:end">
@@ -256,7 +256,7 @@
       <button class="btn btn-ghost" id="aiRefreshModelsBtn" style="width:auto;padding:0 16px;font-size:.85rem" data-i18n="aiFetchModels">↻ Fetch models</button>
     </div>
     <div class="statusline" id="aiSettingsStatus" data-i18n="aiStatusReady">Using the saved provider and model for every AI request.</div>
-    <div class="muted-note" data-i18n="aiSettingsNote" style="margin-top:8px">Add <b>LLM_KEY</b> in Vercel Environment Variables. URL/model can be changed here without exposing the key in the browser.</div>
+    <div class="muted-note" data-i18n="aiSettingsNote" style="margin-top:8px">Add <b>LLM_KEY</b> in Vercel Environment Variables. The model is device-local; the URL must stay on the configured provider.</div>
   </div>
 
   <!-- SETUP -->
@@ -454,12 +454,12 @@ const I18N = {
   en: {
     rtl: false,
     appTitle:"🐴 Dirty Truth & Dare 🔥", tagline:"A slow-burn game of secrets, dares & desire",
-    aiSettingsTitle:"AI settings", aiSettingsSub:"Use any OpenAI-compatible provider URL. The API key stays on the server/Vercel env.",
+    aiSettingsTitle:"AI settings", aiSettingsSub:"Use the configured HTTPS provider URL. The API key stays on the server/Vercel env.",
     aiProviderLabel:"Provider URL", aiModelLabel:"Model", aiFetchModels:"↻ Fetch models",
-    aiSettingsNote:"Add LLM_KEY in Vercel Environment Variables. URL/model can be changed here without exposing the key in the browser.",
-    aiStatusReady:"Using the saved provider and model for every AI request.", aiStatusLoading:"Loading available models…",
+    aiSettingsNote:"Add LLM_KEY in Vercel Environment Variables. The model is device-local; the URL must stay on the configured provider.",
+    aiStatusReady:"Using the configured provider and your saved model for AI requests.", aiStatusLoading:"Loading available models…",
     aiStatusLoaded:"Loaded {n} models.", aiStatusSaved:"AI settings saved.", aiStatusMissingKey:"Add LLM_KEY in Vercel before fetching provider models.",
-    aiStatusLoadFail:"Could not load models from that provider.", aiStatusInvalidUrl:"Enter a public HTTPS OpenAI-compatible URL.",
+    aiStatusLoadFail:"Could not load models from the configured provider URL.", aiStatusInvalidUrl:"Enter the configured HTTPS provider URL.",
     player1:"Player 1", player2:"Player 2", gender:"Gender", male:"Male", female:"Female", partner:"Partner",
     playMode:"Play mode", solo:"📱 Solo", twoDevices:"📲 Two devices",
     hostHint:"You'll create a room and share the code with your partner.",
@@ -1271,9 +1271,14 @@ function renderAiSettings(){
   const url = $("#aiProviderUrl"); if(url && url.value !== state.ai.providerUrl) url.value = state.ai.providerUrl || "";
   renderAiModelOptions();
 }
-function aiProviderOrigin(url){
-  const m = String(url || "").trim().match(/^https:\/\/[^/?#]+/i);
-  return m ? m[0].toLowerCase() : "";
+function normalizeAiProviderUrl(url){
+  const raw = String(url || "").trim();
+  const m = raw.match(/^(https:\/\/[^/?#]+)(\/[^?#]*)?/i);
+  if(!m) return "";
+  let path = (m[2] || "").replace(/\/+$/, "");
+  if(!path) path = "/v1/chat/completions";
+  else if(!/\/chat\/completions$/i.test(path)) path += /\/v1$/i.test(path) ? "/chat/completions" : "/v1/chat/completions";
+  return m[1].toLowerCase() + path;
 }
 function currentAiPayload(){
   return { url: state.ai.providerUrl, model: state.ai.model };
@@ -1313,10 +1318,11 @@ async function bootstrapAiSettings(){
   renderAiSettings();
   try{
     const cfg = await api("/api/ai/config", null, "GET", 15000);
+    const trustedUrl = normalizeAiProviderUrl(cfg.provider_url);
     const providerChanged = !!(
-      aiProviderOrigin(cfg.provider_url) &&
-      aiProviderOrigin(state.ai.providerUrl) &&
-      aiProviderOrigin(state.ai.providerUrl) !== aiProviderOrigin(cfg.provider_url)
+      trustedUrl &&
+      normalizeAiProviderUrl(state.ai.providerUrl) &&
+      normalizeAiProviderUrl(state.ai.providerUrl) !== trustedUrl
     );
     state.ai.providerUrl = cfg.provider_url || state.ai.providerUrl || "";
     if(providerChanged){

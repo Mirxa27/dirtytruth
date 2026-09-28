@@ -619,6 +619,14 @@ def test_get_ai_settings_ignores_untrusted_provider_url(monkeypatch):
     assert ai["url"] == base
     assert ai["model"] == "custom"
 
+def test_get_ai_settings_ignores_same_host_different_path(monkeypatch):
+    monkeypatch.setattr(appmod.socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("8.8.8.8", 443))])
+    base = "https://api.venice.ai/api/v1/chat/completions"
+    monkeypatch.setattr(appmod, "LLM_URL", base)
+    ai = appmod.get_ai_settings({"url": "https://api.venice.ai/other/v1/chat/completions", "model": "custom"})
+    assert ai["url"] == base
+    assert ai["model"] == "custom"
+
 def test_pinned_json_request_uses_validated_address(monkeypatch):
     seen = {}
 
