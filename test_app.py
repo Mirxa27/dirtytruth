@@ -615,6 +615,7 @@ def test_tts_falls_back_to_edge_when_kokoro_fails(client, monkeypatch):
 
 def test_tts_fallback_reuses_explicit_edge_voice(client, monkeypatch):
     def fake_post(url, headers=None, json=None, timeout=None):
+        assert json["voice"] == appmod.TTS_VOICE
         raise RuntimeError("kokoro down")
     captured = {}
     def fake_edge(text, voice=None):

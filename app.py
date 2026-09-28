@@ -652,8 +652,9 @@ def tts():
         return jsonify({"error": "empty text"}), 400
     lang = get_lang(data.get("lang", "en"))
     raw_voice = str(data.get("voice", "")).strip()
-    voice = raw_voice[:20] or tts_voice(lang["code"])
-    edge_voice = raw_voice[:80] if raw_voice.endswith("Neural") else edge_tts_voice(lang["code"])
+    explicit_edge_voice = raw_voice[:80] if raw_voice.endswith("Neural") else ""
+    voice = (raw_voice[:20] if raw_voice and not explicit_edge_voice else "") or tts_voice(lang["code"])
+    edge_voice = explicit_edge_voice or edge_tts_voice(lang["code"])
     # Arabic has no Kokoro voice — go straight to Edge neural speech
     if lang["code"] == "ar":
         audio = tts_via_edge(text, voice=edge_voice)
