@@ -1166,18 +1166,23 @@ async function speak(text){
     const url = URL.createObjectURL(blob);
     lastAudioUrl = url;
     audioEl = new Audio(url);
-    // release the blob once it has played — long sessions would otherwise leak
-    audioEl.addEventListener("ended", () => {
+    const releaseAudioUrl = () => {
       try{ URL.revokeObjectURL(url); }catch(e){}
       if(lastAudioUrl === url) lastAudioUrl = null;
-    });
+      if(audioEl){
+        audioEl.removeEventListener("ended", releaseAudioUrl);
+        audioEl.removeEventListener("pause", releaseAudioUrl);
+        audioEl.removeEventListener("error", releaseAudioUrl);
+      }
+    };
+    // release the blob once playback ends/stops/errors — long sessions would otherwise leak
+    audioEl.addEventListener("ended", releaseAudioUrl);
+    audioEl.addEventListener("pause", releaseAudioUrl);
+    audioEl.addEventListener("error", releaseAudioUrl);
     try{
       await audioEl.play();
     }catch(e){
-      try{
-        URL.revokeObjectURL(url);
-        if(lastAudioUrl === url) lastAudioUrl = null;
-      }catch(_e){}
+      releaseAudioUrl();
       audioEl = null;
       handleVoicePlaybackBlocked();
       return;
