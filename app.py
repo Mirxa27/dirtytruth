@@ -29,7 +29,7 @@ from game_logic import (
     normalize_key,
 )
 import random
-from languages import LANGUAGES, get_lang, language_directive, tts_voice
+from languages import LANGUAGES, get_lang, language_directive, tts_voice, edge_tts_voice
 import rooms
 
 
@@ -72,6 +72,18 @@ EDGE_TTS_ENABLED = os.environ.get("DT_EDGE_TTS", "1") != "0"
 EDGE_TTS_TIMEOUT = float(os.environ.get("DT_EDGE_TTS_TIMEOUT", "9"))
 BLOCKED_LLM_HOSTS = {"localhost", "0.0.0.0"}
 BLOCKED_LLM_SUFFIXES = (".local", ".internal", ".lan", ".home", ".arpa")
+
+
+class TTSTransportError(RuntimeError):
+    """Raised when an upstream TTS provider cannot be reached."""
+
+
+class TTSResponseError(RuntimeError):
+    """Raised when an upstream TTS provider returns unusable audio."""
+
+
+class TTSClientError(RuntimeError):
+    """Raised when a client-supplied TTS option is rejected upstream."""
 
 
 def _resolve_public_host(host, port):
@@ -257,6 +269,29 @@ def tts_via_edge(text, voice=None):
         return asyncio.run(_guarded())
     except Exception:
         return None
+
+
+def tts_via_kokoro(text, voice):
+    """Synthesize `text` with Kokoro; returns MP3 bytes or raises on failure."""
+    try:
+        r = requests.post(
+            TTS_URL,
+            headers={"Authorization": "******", "Content-Type": "application/json"},
+            json={"model": "kokoro", "voice": voice, "input": text},
+            timeout=60,
+        )
+        r.raise_for_status()
+    except requests.HTTPError as e:
+        status = getattr(getattr(e, "response", None), "status_code", None) or getattr(locals().get("r"), "status_code", None)
+        if status is not None and 400 <= int(status) < 500 and int(status) != 429:
+            raise TTSClientError("kokoro rejected the request") from e
+        raise TTSTransportError("kokoro unavailable") from e
+    except requests.RequestException as e:
+        raise TTSTransportError("kokoro unavailable") from e
+    audio = getattr(r, "content", b"") or b""
+    if not audio:
+        raise TTSResponseError("kokoro returned empty audio")
+    return audio
 
 
 # ---------------------------------------------------------------------------
@@ -639,23 +674,25 @@ def tts():
     if not text.strip():
         return jsonify({"error": "empty text"}), 400
     lang = get_lang(data.get("lang", "en"))
-    voice = str(data.get("voice", ""))[:20] or tts_voice(lang["code"])
+    voice = str(data.get("voice", "")).strip()[:20] or tts_voice(lang["code"])
+    default_edge_voice = TTS_AR_VOICE if lang["code"] == "ar" else edge_tts_voice(lang["code"])
+    edge_voice = str(data.get("edgeVoice", "")).strip()[:80] or default_edge_voice
     # Arabic has no Kokoro voice — go straight to Edge neural speech
     if lang["code"] == "ar":
-        audio = tts_via_edge(text)
+        audio = tts_via_edge(text, voice=edge_voice)
         if audio:
             return audio, 200, {"Content-Type": "audio/mpeg", "Cache-Control": "no-store"}
     try:
-        r = requests.post(
-            TTS_URL,
-            headers={"Authorization": "Bearer x", "Content-Type": "application/json"},
-            json={"model": "kokoro", "voice": voice, "input": text},
-            timeout=60,
-        )
-        r.raise_for_status()
-        return r.content, 200, {"Content-Type": "audio/mpeg", "Cache-Control": "no-store"}
-    except Exception as e:
-        return jsonify({"error": str(e)[:200]}), 502
+        audio = tts_via_kokoro(text, voice)
+        return audio, 200, {"Content-Type": "audio/mpeg", "Cache-Control": "no-store"}
+    except (TTSTransportError, TTSResponseError):
+        pass
+    except TTSClientError:
+        return jsonify({"error": "invalid voice"}), 400
+    audio = tts_via_edge(text, voice=edge_voice)
+    if audio:
+        return audio, 200, {"Content-Type": "audio/mpeg", "Cache-Control": "no-store"}
+    return jsonify({"error": "tts unavailable"}), 502
 
 
 @app.route("/api/languages")
@@ -759,6 +796,10 @@ def generate():
     lang = get_lang(data.get("lang", "en"))
     ai = get_ai_settings(data.get("ai"))
     prefs = data.get("prefs") if isinstance(data.get("prefs"), dict) else {}
+    mode = str(data.get("mode", "solo")).lower()
+    if mode not in {"solo", "room"}:
+        mode = "solo"
+    auto_escalate = data.get("autoEscalate") is not False
     try:
         heat = max(1, min(10, int(data.get("heat", 3))))
         round_no = max(1, int(data.get("round", 1)))
@@ -810,6 +851,8 @@ def generate():
         f"Target player (the one who must {'answer' if chosen == 'truth' else 'perform'}): {target}\n"
         f"Partner (the other player): {partner_name}\n"
         f"Current heat level: {eff_heat}/10 — match this EXACTLY, do not exceed it.\n"
+        f"Session mode: {'ROOM (shared across two devices)' if mode == 'room' else 'SOLO (single device/couple together)'}.\n"
+        f"Auto-escalate setting: {'enabled' if auto_escalate else 'disabled'} (respect the current heat and pacing).\n"
         f"Game phase: {phase['name']} — {phase['desc']}\n"
         f"Game round: {round_no} (early rounds = build tension slowly)\n"
         f"Recent challenges (do NOT repeat or rephrase these): {json.dumps(recent) if recent else 'none — this is the first challenge'}\n"

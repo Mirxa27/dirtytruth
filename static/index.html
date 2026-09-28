@@ -203,6 +203,8 @@
   .statusline{font-size:.78rem;color:var(--dim);margin-top:8px;line-height:1.4}
   .statusline.ok{color:#8ff1b8}
   .statusline.warn{color:#fbbf24}
+  .setup-summary{margin-top:10px;padding:10px 12px;border-radius:12px;background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.18)}
+  .load-detail{margin-top:10px;font-size:.8rem;color:var(--dim);line-height:1.4}
 
   /* entrance animation */
   .card.enter{animation:enter .4s ease}
@@ -261,6 +263,7 @@
     <div class="statusline" id="aiSettingsStatus" data-i18n="aiStatusReady">Using Venice by default. Open settings only if you want your own provider details.</div>
     <div class="muted-note" data-i18n="aiSettingsNote" style="margin-top:8px">Leave the API key blank to use the default Venice setup. Custom API keys stay only in this tab; saved URL/model settings stay on this device.</div>
   </div>
+  <div class="card hidden" id="voiceNotice" role="status" aria-live="polite" style="padding:10px 14px;font-size:.82rem"></div>
 
   <!-- SETUP -->
   <div class="card" id="setupCard">
@@ -324,6 +327,7 @@
       <div class="toggle on" id="escalateToggle"><span class="ico">🌡️</span><span data-i18n="autoEscalate">Auto-escalate</span></div>
     </div>
     <div style="font-size:.72rem;color:var(--dim);margin-top:10px;line-height:1.4" data-i18n="helpText">Spin the bottle, then choose truth or dare. Mid-game you swear The Oath — and skipping or refusing any task costs $100.</div>
+    <div class="statusline setup-summary" id="setupSummary"></div>
     <div style="height:14px"></div>
     <button class="btn" id="startBtn" data-i18n="start">Start the game 🔥</button>
   </div>
@@ -396,6 +400,7 @@
       <span class="cassia-busy">💋</span>
       <div class="spinner"></div>
       <div class="load-line" id="loadLine"></div>
+      <div class="load-detail" id="loadDetail"></div>
     </div>
 
     <!-- CHALLENGE -->
@@ -473,9 +478,9 @@ const I18N = {
     prefsTitle:"🔒 Secret preferences (optional, private)", prefsP1:"Player 1's secrets", prefsP2:"Player 2's secrets",
     phTurnons:"turn-ons / kinks", phFantasy:"an unsaid fantasy", phBoundary:"a hard limit (never crossed)",
     prefsNote:"Only Cassia sees these. They're woven into the game so your partner discovers your real desires through play.",
-    startingHeat:"Starting heat", voice:"Voice", autoEscalate:"Auto-escalate",
+    startingHeat:"Starting heat", voice:"Voice", autoEscalate:"Auto-escalate", voiceUnavailableNotice:"🎙️ Voice unavailable — continuing silently.", voicePlaybackBlocked:"🎙️ Tap once more to allow voice playback.", voiceLineSkipped:"🎙️ Voice skipped for this line.",
     helpText:"Spin the bottle, then choose truth or dare. Mid-game you swear The Oath — and skipping or refusing any task costs $100.",
-    start:"Start the game 🔥", round:"Round", new:"↺ New", spinHint:"Set the heat, then spin the bottle",
+    start:"Start the game 🔥", createRoomCta:"📤 Create room", joinRoomCta:"📲 Join room", round:"Round", new:"↺ New", spinHint:"Set the heat, then spin the bottle",
     spin:"🍾 Spin the Bottle", penaltyNote:"💸 $100 penalty — skip a task or refuse to perform it, and you owe your partner $100.",
     oathTitle:"The Oath", oathSwear:"I swear it — let's play for real 🔥",
     oathIntro:"Before we go any deeper, you two seal the rules.",
@@ -516,9 +521,9 @@ const I18N = {
     prefsTitle:"🔒 Preferencias secretas (opcional, privado)", prefsP1:"Secretos del jugador 1", prefsP2:"Secretos del jugador 2",
     phTurnons:"gustos / kinks", phFantasy:"un fantasma no dicho", phBoundary:"un límite duro (nunca cruzado)",
     prefsNote:"Solo Cassia ve esto. Se entrelaza en el juego para que tu pareja descubra tus deseos reales jugando.",
-    startingHeat:"Calor inicial", voice:"Voz", autoEscalate:"Auto-escalado",
+    startingHeat:"Calor inicial", voice:"Voz", autoEscalate:"Auto-escalado", voiceUnavailableNotice:"🎙️ Voz no disponible — seguimos en silencio.", voicePlaybackBlocked:"🎙️ Toca una vez más para permitir la voz.", voiceLineSkipped:"🎙️ La voz se omitió en esta línea.",
     helpText:"Gira la botella y elige verdad o reto. A mitad de juego juras el Juramento — y saltarte o negarte a una tarea cuesta $100.",
-    start:"Comenzar el juego 🔥", round:"Ronda", new:"↺ Nuevo", spinHint:"Ajusta el calor y gira la botella",
+    start:"Comenzar el juego 🔥", createRoomCta:"📤 Crear sala", joinRoomCta:"📲 Unirse a la sala", round:"Ronda", new:"↺ Nuevo", spinHint:"Ajusta el calor y gira la botella",
     spin:"🍾 Girar la botella", penaltyNote:"💸 Penalización de $100 — salta una tarea o negarte a hacerla y debes $100 a tu pareja.",
     oathTitle:"El Juramento", oathSwear:"Lo juro — juguemos en serio 🔥",
     oathIntro:"Antes de ir más lejos, sellan las reglas.",
@@ -559,9 +564,9 @@ const I18N = {
     prefsTitle:"🔒 Préférences secrètes (optionnel, privé)", prefsP1:"Secrets du joueur 1", prefsP2:"Secrets du joueur 2",
     phTurnons:"attirances / kinks", phFantasy:"un fantasme non dit", phBoundary:"une limite dure (jamais franchie)",
     prefsNote:"Seul Cassia voit cela. C'est tissé dans le jeu pour que votre partenaire découvre vos vrais désirs en jouant.",
-    startingHeat:"Chaleur initiale", voice:"Voix", autoEscalate:"Auto-escalade",
+    startingHeat:"Chaleur initiale", voice:"Voix", autoEscalate:"Auto-escalade", voiceUnavailableNotice:"🎙️ Voix indisponible — on continue en silence.", voicePlaybackBlocked:"🎙️ Touchez encore une fois pour autoriser la voix.", voiceLineSkipped:"🎙️ La voix a été ignorée pour cette ligne.",
     helpText:"Faites tourner la bouteille, puis choisissez vérité ou défi. En milieu de jeu, vous prêtez le Serment — et sauter ou refuser une tâche coûte 100 $.",
-    start:"Commencer le jeu 🔥", round:"Manche", new:"↺ Nouveau", spinHint:"Réglez la chaleur, puis faites tourner la bouteille",
+    start:"Commencer le jeu 🔥", createRoomCta:"📤 Créer une salle", joinRoomCta:"📲 Rejoindre la salle", round:"Manche", new:"↺ Nouveau", spinHint:"Réglez la chaleur, puis faites tourner la bouteille",
     spin:"🍾 Faire tourner", penaltyNote:"💸 Pénalité de 100 $ — sautez une tâche ou refusez de l'accomplir et vous devez 100 $ à votre partenaire.",
     oathTitle:"Le Serment", oathSwear:"Je le jure — jouons pour de vrai 🔥",
     oathIntro:"Avant d'aller plus loin, vous scellez les règles.",
@@ -602,9 +607,9 @@ const I18N = {
     prefsTitle:"🔒 Geheime Vorlieben (optional, privat)", prefsP1:"Geheimnisse von Spieler 1", prefsP2:"Geheimnisse von Spieler 2",
     phTurnons:"Anreger / Kinks", phFantasy:"ein ungesagtes Fantasie", phBoundary:"eine harte Grenze (nie überschritten)",
     prefsNote:"Nur Cassia sieht das. Es wird ins Spiel gewoben, damit dein Partner deine wahren Wünsche beim Spielen entdeckt.",
-    startingHeat:"Startwärme", voice:"Stimme", autoEscalate:"Auto-Eskalation",
+    startingHeat:"Startwärme", voice:"Stimme", autoEscalate:"Auto-Eskalation", voiceUnavailableNotice:"🎙️ Stimme nicht verfügbar — weiter ohne Ton.", voicePlaybackBlocked:"🎙️ Tippe noch einmal, um die Stimme zu erlauben.", voiceLineSkipped:"🎙️ Die Stimme wurde für diese Zeile übersprungen.",
     helpText:"Drehe die Flasche, dann wähle Wahrheit oder Mutprobe. Mitte des Spiels schwört ihr den Eid — und das Überspringen oder Verweigern einer Aufgabe kostet 100 $.",
-    start:"Spiel starten 🔥", round:"Runde", new:"↺ Neu", spinHint:"Stelle die Wärme ein, dann drehe die Flasche",
+    start:"Spiel starten 🔥", createRoomCta:"📤 Raum erstellen", joinRoomCta:"📲 Raum beitreten", round:"Runde", new:"↺ Neu", spinHint:"Stelle die Wärme ein, dann drehe die Flasche",
     spin:"🍾 Flasche drehen", penaltyNote:"💸 100 $ Strafe — springe eine Aufgabe über oder verweigere sie, und du schuldest deinem Partner 100 $.",
     oathTitle:"Der Eid", oathSwear:"Ich schwöre es — lass uns ernst spielen 🔥",
     oathIntro:"Bevor es weitergeht, besiegelt ihr die Regeln.",
@@ -645,9 +650,9 @@ const I18N = {
     prefsTitle:"🔒 Preferenze segrete (opzionale, privato)", prefsP1:"Segreti del giocatore 1", prefsP2:"Segreti del giocatore 2",
     phTurnons:"desideri / kink", phFantasy:"un fantasy non detto", phBoundary:"un limite duro (mai superato)",
     prefsNote:"Solo Cassia vede questo. È intrecciato nel gioco così il tuo partner scopre i tuoi veri desideri giocando.",
-    startingHeat:"Calore iniziale", voice:"Voce", autoEscalate:"Auto-escalation",
+    startingHeat:"Calore iniziale", voice:"Voce", autoEscalate:"Auto-escalation", voiceUnavailableNotice:"🎙️ Voce non disponibile — continuiamo in silenzio.", voicePlaybackBlocked:"🎙️ Tocca ancora una volta per consentire la voce.", voiceLineSkipped:"🎙️ La voce è stata saltata per questa riga.",
     helpText:"Gira la bottiglia, poi scegli verità o sfida. A metà gioco giuri il Giuramento — e saltare o rifiutare un compito costa $100.",
-    start:"Inizia il gioco 🔥", round:"Mossa", new:"↺ Nuovo", spinHint:"Imposta il calore, poi gira la bottiglia",
+    start:"Inizia il gioco 🔥", createRoomCta:"📤 Crea stanza", joinRoomCta:"📲 Entra nella stanza", round:"Mossa", new:"↺ Nuovo", spinHint:"Imposta il calore, poi gira la bottiglia",
     spin:"🍾 Gira la bottiglia", penaltyNote:"💸 Penalità di $100 — salta un compito o rifiutalo e devi $100 al tuo partner.",
     oathTitle:"Il Giuramento", oathSwear:"Lo giuro — giochiamo sul serio 🔥",
     oathIntro:"Prima di andare più a fondo, sigillate le regole.",
@@ -688,9 +693,9 @@ const I18N = {
     prefsTitle:"🔒 Preferências secretas (opcional, privado)", prefsP1:"Segredos do jogador 1", prefsP2:"Segredos do jogador 2",
     phTurnons:"gostos / kinks", phFantasy:"um fantasia não dita", phBoundary:"um limite duro (nunca cruzado)",
     prefsNote:"Só Cassia vê isso. É tecido no jogo para que seu parceiro descubra seus desejos reais jogando.",
-    startingHeat:"Calor inicial", voice:"Voz", autoEscalate:"Auto-escalação",
+    startingHeat:"Calor inicial", voice:"Voz", autoEscalate:"Auto-escalação", voiceUnavailableNotice:"🎙️ Voz indisponível — continuando em silêncio.", voicePlaybackBlocked:"🎙️ Toque mais uma vez para permitir a voz.", voiceLineSkipped:"🎙️ A voz foi ignorada nesta linha.",
     helpText:"Gire a garrafa, então escolha verdade ou desafio. No meio do jogo vocês juram o Juramento — e pular ou recusar uma tarefa custa $100.",
-    start:"Começar o jogo 🔥", round:"Rodada", new:"↺ Novo", spinHint:"Ajuste o calor, então gire a garrafa",
+    start:"Começar o jogo 🔥", createRoomCta:"📤 Criar sala", joinRoomCta:"📲 Entrar na sala", round:"Rodada", new:"↺ Novo", spinHint:"Ajuste o calor, então gire a garrafa",
     spin:"🍾 Girar a garrafa", penaltyNote:"💸 Penalidade de $100 — pule uma tarefa ou recuse e deve $100 ao seu parceiro.",
     oathTitle:"O Juramento", oathSwear:"Eu juro — vamos jogar a sério 🔥",
     oathIntro:"Antes de irmos mais fundo, vocês selam as regras.",
@@ -731,9 +736,9 @@ const I18N = {
     prefsTitle:"🔒 गुप्त पसंद (वैकल्पिक, निजी)", prefsP1:"खिलाड़ी 1 के रहस्य", prefsP2:"खिलाड़ी 2 के रहस्य",
     phTurnons:"पसंद / कinks", phFantasy:"एक अनकही कल्पना", phBoundary:"एक कठोर सीमा (कभी नहीं पार)",
     prefsNote:"सिर्फ़ कैसिया यह देखती है। यह खेल में बुना जाता है ताकि आपका साथी खेलते हुए आपकी वास्तविक इच्छाएँ खोजे।",
-    startingHeat:"शुरुआती गर्मी", voice:"आवाज़", autoEscalate:"ऑटो-एस्केलेशन",
+    startingHeat:"शुरुआती गर्मी", voice:"आवाज़", autoEscalate:"ऑटो-एस्केलेशन", voiceUnavailableNotice:"🎙️ आवाज़ उपलब्ध नहीं है — अब बिना आवाज़ के जारी है।", voicePlaybackBlocked:"🎙️ आवाज़ चलाने की अनुमति देने के लिए एक बार और टैप करें।", voiceLineSkipped:"🎙️ इस पंक्ति के लिए आवाज़ छोड़ दी गई।",
     helpText:"बोतल घुमाएँ, फिर सच या चुनौती चुनें। खेल के बीच आप शपथ लेते हैं — और किसी कार्य को छोड़ना या मना करना $100 का खर्च है।",
-    start:"खेल शुरू करें 🔥", round:"राउंड", new:"↺ नया", spinHint:"गर्मी सेट करें, फिर बोतल घुमाएँ",
+    start:"खेल शुरू करें 🔥", createRoomCta:"📤 रूम बनाएँ", joinRoomCta:"📲 रूम में जुड़ें", round:"राउंड", new:"↺ नया", spinHint:"गर्मी सेट करें, फिर बोतल घुमाएँ",
     spin:"🍾 बोतल घुमाएँ", penaltyNote:"💸 $100 जुर्माना — किसी कार्य को छोड़ें या मना करें, और आप अपने साथी को $100 देते हैं।",
     oathTitle:"शपथ", oathSwear:"मैं शपथ लेता हूँ — आइए गंभीरता से खेलें 🔥",
     oathIntro:"और गहरे जाने से पहले, आप दोनों नियम सील करते हैं।",
@@ -774,9 +779,9 @@ const I18N = {
     prefsTitle:"🔒 秘密の好み（任意、非公開）", prefsP1:"プレイヤー1の秘密", prefsP2:"プレイヤー2の秘密",
     phTurnons:"好み / キュン", phFantasy:"言えなかったファンタジー", phBoundary:"絶対の限界（越えない）",
     prefsNote:"カシアだけがこれを見ます。ゲームに織り込まれ、パートナーがプレイを通じて本当の欲望を発見します。",
-    startingHeat:"初期の熱", voice:"音声", autoEscalate:"自動エスカレーション",
+    startingHeat:"初期の熱", voice:"音声", autoEscalate:"自動エスカレーション", voiceUnavailableNotice:"🎙️ 音声を使えません — 無音で続けます。", voicePlaybackBlocked:"🎙️ 音声再生を許可するにはもう一度タップしてください。", voiceLineSkipped:"🎙️ この行の音声はスキップされました。",
     helpText:"ボトルを回し、真実または挑戦を選択。ゲームの途中で誓いを立てます — タスクをスキップまたは拒否すると$100の罰金。",
-    start:"ゲーム開始 🔥", round:"ラウンド", new:"↺ 新規", spinHint:"熱を設定してボトルを回す",
+    start:"ゲーム開始 🔥", createRoomCta:"📤 ルームを作成", joinRoomCta:"📲 ルームに参加", round:"ラウンド", new:"↺ 新規", spinHint:"熱を設定してボトルを回す",
     spin:"🍾 ボトルを回す", penaltyNote:"💸 $100の罰金 — タスクをスキップまたは拒否すると、パートナーに$100を支払います。",
     oathTitle:"誓い", oathSwear:"誓います — 本気で遊びましょう 🔥",
     oathIntro:"さらに深く進む前に、二人でルールを誓います。",
@@ -817,9 +822,9 @@ const I18N = {
     prefsTitle:"🔒 秘密偏好（可选，私密）", prefsP1:"玩家1的秘密", prefsP2:"玩家2的秘密",
     phTurnons:"喜好 / 癖", phFantasy:"一个未说出口幻想", phBoundary:"一条硬底线（绝不越过）",
     prefsNote:"只有Cassia能看到这些。它们被编织进游戏，让你的伴侣通过游戏发现你真正的欲望。",
-    startingHeat:"起始热度", voice:"语音", autoEscalate:"自动升级",
+    startingHeat:"起始热度", voice:"语音", autoEscalate:"自动升级", voiceUnavailableNotice:"🎙️ 语音不可用——将静默继续。", voicePlaybackBlocked:"🎙️ 请再点一次以允许语音播放。", voiceLineSkipped:"🎙️ 这一句的语音已跳过。",
     helpText:"转动瓶子，然后选择真相或胆量。游戏中途你们宣誓——跳过或拒绝任何任务都要支付$100。",
-    start:"开始游戏 🔥", round:"回合", new:"↺ 新", spinHint:"设置热度，然后转动瓶子",
+    start:"开始游戏 🔥", createRoomCta:"📤 创建房间", joinRoomCta:"📲 加入房间", round:"回合", new:"↺ 新", spinHint:"设置热度，然后转动瓶子",
     spin:"🍾 转动瓶子", penaltyNote:"💸 $100罚款——跳过或拒绝执行任务，你就欠伴侣$100。",
     oathTitle:"誓言", oathSwear:"我发誓——让我们认真玩 🔥",
     oathIntro:"在更进一步之前，你们共同封印规则。",
@@ -860,9 +865,9 @@ const I18N = {
     prefsTitle:"🔒 تفضيلات سرية (اختياري، خاص)", prefsP1:"أسرار اللاعب 1", prefsP2:"أسرار اللاعب 2",
     phTurnons:"محفّزات / هوس", phFantasy:"خيال لم يُقل", phBoundary:"حدّ صارم (لا يُتجاوز)",
     prefsNote:"تري Cassia هذه فقط. تُنسج في اللعبة ليكتشف شريكك رغباتك الحقيقية أثناء اللعب.",
-    startingHeat:"الحرارة الابتدائية", voice:"الصوت", autoEscalate:"تصعيد تلقائي",
+    startingHeat:"الحرارة الابتدائية", voice:"الصوت", autoEscalate:"تصعيد تلقائي", voiceUnavailableNotice:"🎙️ الصوت غير متاح — سنكمل بصمت.", voicePlaybackBlocked:"🎙️ اضغط مرة أخرى للسماح بتشغيل الصوت.", voiceLineSkipped:"🎙️ تم تخطي الصوت لهذا السطر.",
     helpText:"أدر القارورة ثم اختر الحقيقة أو التحدّي. في منتصف اللعبة تحلفان القسم — وتخطّي أو رفض أي مهمة يكلفك 100$.",
-    start:"ابدأ اللعبة 🔥", round:"جولة", new:"↺ جديد", spinHint:"اضبط الحرارة ثم أدر القارورة",
+    start:"ابدأ اللعبة 🔥", createRoomCta:"📤 أنشئ غرفة", joinRoomCta:"📲 انضم إلى الغرفة", round:"جولة", new:"↺ جديد", spinHint:"اضبط الحرارة ثم أدر القارورة",
     spin:"🍾 أدر القارورة", penaltyNote:"💸 غرامة 100$ — تخطَّ مهمة أو ارفض تنفيذها فتدين شريكك بـ 100$.",
     oathTitle:"القسم", oathSwear:"أقسم — لنلعب بجدّية 🔥",
     oathIntro:"قبل أن نتعمق أكثر، تختمان القواعد معاً.",
@@ -931,6 +936,8 @@ function applyLang(){
   // refresh visible challenge copy in the new language — NEVER replay its TTS
   if(state.challenge) renderChallenge({silent:true});
   if(!state.oathSworn && state.round === OATH_ROUND) showOath(true);
+  renderSetupSummary();
+  if(voiceNoticeKey) showVoiceNotice(voiceNoticeKey);
 }
 
 /* =========================================================================
@@ -982,16 +989,46 @@ window.esc = esc;
 /* =========================================================================
    Sound (WebAudio SFX)
    ========================================================================= */
-let AC = null;
-function ac(){ if(!AC){ try{ AC = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return AC; }
+let AC = null, sfxDisabled = false;
+function disableSfx(){
+  sfxDisabled = true;
+  try{
+    if(AC && typeof AC.close === "function") AC.close();
+  }catch(e){}
+  AC = null;
+}
+function ac(){
+  if(sfxDisabled) return null;
+  if(!AC){
+    try{
+      AC = new (window.AudioContext||window.webkitAudioContext)();
+      if(AC && typeof AC.addEventListener === "function"){
+        AC.addEventListener("statechange", () => {
+          if(AC && AC.state === "closed") disableSfx();
+        });
+      }
+    }catch(e){
+      disableSfx();
+    }
+  }
+  return AC;
+}
 function beep(freq, dur, type="sine", vol=0.15){
   const c = ac(); if(!c) return;
-  const o = c.createOscillator(), g = c.createGain();
-  o.type = type; o.frequency.value = freq;
-  g.gain.setValueAtTime(vol, c.currentTime);
-  g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
-  o.connect(g); g.connect(c.destination);
-  o.start(); o.stop(c.currentTime + dur);
+  try{
+    if(c.state === "suspended" && typeof c.resume === "function" &&
+       (!navigator.userActivation || navigator.userActivation.hasBeenActive)){
+      c.resume().catch(()=>{});
+    }
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
+    o.connect(g); g.connect(c.destination);
+    o.start(); o.stop(c.currentTime + dur);
+  }catch(e){
+    disableSfx();
+  }
 }
 const SFX = {
   spin(){ beep(220,0.08,"sawtooth",0.08); setTimeout(()=>beep(330,0.08,"sawtooth",0.08),90); setTimeout(()=>beep(440,0.1,"sawtooth",0.08),180); },
@@ -1070,21 +1107,96 @@ function confettiLoop(){
    TTS
    ========================================================================= */
 let audioEl = null, lastAudioUrl = null;
+let voiceIssueShown = false, voicePlayBlockedShown = false;
+let voiceNoticeKey = "";
+function setVoiceNotice(msg){
+  const el = $("#voiceNotice"); if(!el) return;
+  if(msg){
+    el.textContent = msg;
+    el.classList.remove("hidden");
+  } else {
+    el.textContent = "";
+    el.classList.add("hidden");
+  }
+}
+function showVoiceNotice(key){
+  voiceNoticeKey = key || "";
+  setVoiceNotice(voiceNoticeKey ? t(voiceNoticeKey) : "");
+}
+function handleVoiceFailure(){
+  if(!state.voice) return;
+  state.voice = false;
+  const tgl = $("#voiceToggle"); if(tgl) tgl.classList.remove("on");
+  saveState();
+  renderSetupSummary();
+  showVoiceNotice("voiceUnavailableNotice");
+  if(!voiceIssueShown){
+    voiceIssueShown = true;
+    toast(t("voiceUnavailableNotice"));
+  }
+}
+function handleVoicePlaybackBlocked(){
+  showVoiceNotice("voicePlaybackBlocked");
+  if(!voicePlayBlockedShown){
+    voicePlayBlockedShown = true;
+    toast(t("voicePlaybackBlocked"));
+  }
+}
+function handleVoiceLineIssue(){
+  showVoiceNotice("voiceLineSkipped");
+  toast(t("voiceLineSkipped"));
+}
 async function speak(text){
   if(!state.voice || !text) return;
   try{
     const r = await fetch("/api/tts", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({text, lang: uiLang})});
-    if(!r.ok) return;
+    if(!r.ok){
+      let err = "";
+      try{
+        const d = await r.json();
+        err = String((d && d.error) || "").toLowerCase();
+      }catch(e){}
+      if(r.status === 400 && err.includes("invalid voice")) handleVoiceFailure();
+      else handleVoiceLineIssue();
+      return;
+    }
     const blob = await r.blob();
-    if(audioEl) audioEl.pause();
-    if(lastAudioUrl){ try{ URL.revokeObjectURL(lastAudioUrl); }catch(e){} }
+    if(audioEl){
+      audioEl.pause();
+      try{ audioEl.src = ""; }catch(e){}
+      audioEl = null;
+    }
+    if(lastAudioUrl){
+      try{ URL.revokeObjectURL(lastAudioUrl); }catch(e){}
+      lastAudioUrl = null;
+    }
     const url = URL.createObjectURL(blob);
     lastAudioUrl = url;
     audioEl = new Audio(url);
-    // release the blob once it has played — long sessions would otherwise leak
-    audioEl.addEventListener("ended", () => { try{ URL.revokeObjectURL(url); }catch(e){} });
-    audioEl.play().catch(()=>{});
-  }catch(e){}
+    const releaseAudioUrl = () => {
+      try{ URL.revokeObjectURL(url); }catch(e){}
+      if(lastAudioUrl === url) lastAudioUrl = null;
+      if(audioEl){
+        audioEl.removeEventListener("ended", releaseAudioUrl);
+        audioEl.removeEventListener("error", releaseAudioUrl);
+      }
+    };
+    // release the blob once playback ends/errors — long sessions would otherwise leak
+    audioEl.addEventListener("ended", releaseAudioUrl);
+    audioEl.addEventListener("error", releaseAudioUrl);
+    try{
+      await audioEl.play();
+    }catch(e){
+      releaseAudioUrl();
+      audioEl = null;
+      handleVoicePlaybackBlocked();
+      return;
+    }
+    voicePlayBlockedShown = false;
+    if(voiceNoticeKey === "voicePlaybackBlocked" || voiceNoticeKey === "voiceLineSkipped"){
+      showVoiceNotice("");
+    }
+  }catch(e){ handleVoiceLineIssue(); }
 }
 
 /* =========================================================================
@@ -1608,6 +1720,30 @@ function readSetup(){
     p2: {name: $("#p2name").value.trim() || "Player 2", gender: g2?g2.dataset.g:"partner"},
   };
 }
+function updateStartButton(){
+  const btn = $("#startBtn"); if(!btn) return;
+  const mode = document.querySelector("#modeSel button.sel")?.dataset.mode || "solo";
+  const joining = !!$("#joinCode").value.trim();
+  if(mode === "room"){
+    btn.textContent = joining ? t("joinRoomCta") : t("createRoomCta");
+  } else {
+    btn.textContent = t("start");
+  }
+}
+function renderSetupSummary(){
+  const el = $("#setupSummary"); if(!el) return;
+  const {p1, p2} = readSetup();
+  const mode = document.querySelector("#modeSel button.sel")?.dataset.mode || "solo";
+  const heat = +$("#heatRange").value || state.heat || 2;
+  const heatName = ((t("heatNames") || [])[heat] || "").trim();
+  const modeBadge = mode === "room" ? ($("#joinCode").value.trim() ? "📲" : "🏠") : "📱";
+  const voiceBadge = state.voice ? "🎙️" : "🔇";
+  const autoBadge = state.autoEscalate ? "↗️" : "⏸️";
+  el.className = "statusline setup-summary" + (!state.voice ? " warn" : "");
+  el.textContent = `${modeBadge} ${p1.name} + ${p2.name} · 🔥 ${heat}/10 ${heatName} · ${voiceBadge} · ${autoBadge}`;
+  updateStartButton();
+}
+window.renderSetupSummary = renderSetupSummary;
 function readPrefs(){
   const {p1, p2} = readSetup();
   return {
@@ -1704,12 +1840,20 @@ $("#shareLinkBtn").addEventListener("click", () => {
    Loading — shown while Cassia crafts a challenge
    ========================================================================= */
 let loadTimer = null;
-function startLoading(){
+function renderLoadingDetail(chosen){
+  const detail = $("#loadDetail"); if(!detail) return;
+  const heatName = (t("heatNames") || [])[state.heat] || "";
+  const who = state.target && state.target.name ? state.target.name : "…";
+  const what = chosen === "truth" ? t("truth") : t("dare");
+  detail.textContent = `${who} · ${what} · 🔥 ${state.heat}/10 ${heatName}`.trim();
+}
+function startLoading(chosen){
   const lines = t("loadLines") || ["…"];
   $("#loadingCard").classList.remove("hidden");
   $("#loadingCard").classList.add("enter");
   let i = 0;
   $("#loadLine").textContent = lines[0];
+  renderLoadingDetail(chosen);
   clearInterval(loadTimer);
   loadTimer = setInterval(() => { i = (i+1) % lines.length; $("#loadLine").textContent = lines[i]; }, 1100);
   state.generating = true;
@@ -1718,6 +1862,7 @@ function startLoading(){
 function stopLoading(){
   clearInterval(loadTimer); loadTimer = null;
   $("#loadingCard").classList.add("hidden");
+  $("#loadDetail").textContent = "";
   state.generating = false;
   if(!$("#gameUI").classList.contains("hidden")) $("#spinBtn").disabled = false;
   if(state.roomCode) startRoomPolling();
@@ -1869,13 +2014,14 @@ $("#dareBtn").addEventListener("click", () => pickType("dare"));
    ========================================================================= */
 async function generateChallenge(chosen){
   if(state.generating) return null;
-  startLoading();
+  startLoading(chosen);
   $("#spinStatus").textContent = "";
   const body = {
     players: state.players, chosen, target: state.target.name,
     heat: state.heat, round: state.round, recent: state.recent,
     avoid: state.seen,
-    lang: uiLang, prefs: state.prefs,
+    lang: uiLang, prefs: state.prefs, mode: state.mode,
+    autoEscalate: state.autoEscalate,
   };
   let d;
   try{
@@ -2216,15 +2362,20 @@ $("#chatInput").addEventListener("keydown", e => { if(e.key === "Enter") sendCha
    ========================================================================= */
 $("#voiceToggle").addEventListener("click", () => {
   state.voice = !state.voice;
+  if(state.voice) voiceIssueShown = false;
+  voicePlayBlockedShown = false;
+  showVoiceNotice("");
   $("#voiceToggle").classList.toggle("on", state.voice);
   saveState();
+  renderSetupSummary();
 });
 $("#escalateToggle").addEventListener("click", () => {
   state.autoEscalate = !state.autoEscalate;
   $("#escalateToggle").classList.toggle("on", state.autoEscalate);
   saveState();
+  renderSetupSummary();
 });
-$("#heatRange").addEventListener("input", e => { state.heat = +e.target.value; updateHeatLabel(); renderPhase(); });
+$("#heatRange").addEventListener("input", e => { state.heat = +e.target.value; updateHeatLabel(); renderPhase(); renderSetupSummary(); });
 $("#heatRange2").addEventListener("input", e => { state.heat = +e.target.value; updateHeatLabel(); renderPhase(); saveState(); if(state.roomCode) roomAction("set_heat", {heat: state.heat}); });
 
 /* =========================================================================
@@ -2234,6 +2385,7 @@ document.querySelectorAll(".genders[data-for] button").forEach(b => {
   b.addEventListener("click", () => {
     b.parentElement.querySelectorAll("button").forEach(x=>x.classList.remove("sel"));
     b.classList.add("sel");
+    renderSetupSummary();
   });
 });
 document.querySelectorAll("#modeSel button").forEach(b => {
@@ -2243,7 +2395,11 @@ document.querySelectorAll("#modeSel button").forEach(b => {
     const isRoom = b.dataset.mode === "room";
     $("#roomHost").classList.toggle("hidden", !isRoom);
     $("#roomJoin").classList.toggle("hidden", !isRoom);
+    renderSetupSummary();
   });
+});
+["#p1name","#p2name","#joinCode"].forEach(sel => {
+  $(sel).addEventListener("input", renderSetupSummary);
 });
 
 /* =========================================================================
@@ -2287,6 +2443,7 @@ buildLangSelect();
 bindAiSettings();
 setAiSettingsOpen(false);
 applyLang();
+renderSetupSummary();
 bootstrapAiSettings().catch(()=>{});
 async function enterGameUI(resumeRoomText){
   $("#setupCard").classList.add("hidden");
@@ -2362,6 +2519,7 @@ async function resumeRoomSession(){
   $("#roomJoin").classList.remove("hidden");
   $("#joinCode").value = code;
   try{ history.replaceState(null, "", location.pathname); }catch(e){}
+  renderSetupSummary();
   toast(t("joinLinkTitle"));
 })();
 </script>

@@ -170,6 +170,24 @@ def test_generate_dare_llm(client, monkeypatch):
     assert all(s["seconds"] for s in d["steps"])
     assert captured["ai"]["model"] == "custom-model"
 
+def test_generate_includes_mode_and_escalation_context(client, monkeypatch):
+    captured = {}
+    def fake_llm(payload, ai_settings=None, retries=3):
+        captured["user"] = payload["messages"][1]["content"]
+        return json.dumps({
+            "text": "Slow Embrace",
+            "steps": [{"instruction": "Alex, hold Sam close.", "seconds": 30}],
+        })
+    monkeypatch.setattr(appmod, "call_llm", fake_llm)
+    r = client.post("/api/generate", json={
+        "players": [{"name": "Alex", "gender": "male"}, {"name": "Sam", "gender": "female"}],
+        "chosen": "dare", "target": "Alex", "heat": 4, "recent": [], "round": 2,
+        "mode": "room", "autoEscalate": False,
+    })
+    assert r.status_code == 200
+    assert "Session mode: ROOM (shared across two devices)." in captured["user"]
+    assert "Auto-escalate setting: disabled" in captured["user"]
+
 def test_generate_uses_custom_provider_key(client, monkeypatch):
     captured = {}
     def fake_llm(payload, ai_settings=None, retries=3):
@@ -587,10 +605,112 @@ def test_tts_success(client, monkeypatch):
 
 def test_tts_upstream_failure(client, monkeypatch):
     def fake_post(url, headers=None, json=None, timeout=None):
-        raise RuntimeError("tts down")
+        raise appmod.requests.RequestException("tts down")
     monkeypatch.setattr(appmod.requests, "post", fake_post)
+    monkeypatch.setattr(appmod, "tts_via_edge", lambda *a, **k: None)
     r = client.post("/api/tts", json={"text": "Hello"})
     assert r.status_code == 502
+
+
+def test_tts_falls_back_to_edge_when_kokoro_fails(client, monkeypatch):
+    from languages import edge_tts_voice
+    def fake_post(url, headers=None, json=None, timeout=None):
+        raise appmod.requests.RequestException("kokoro down")
+    captured = {}
+    def fake_edge(text, voice=None):
+        captured["text"] = text
+        captured["voice"] = voice
+        return b"EDGE_MP3"
+    monkeypatch.setattr(appmod.requests, "post", fake_post)
+    monkeypatch.setattr(appmod, "tts_via_edge", fake_edge)
+    r = client.post("/api/tts", json={"text": "Hola", "lang": "es"})
+    assert r.status_code == 200
+    assert r.content_type == "audio/mpeg"
+    assert r.data == b"EDGE_MP3"
+    assert captured["text"] == "Hola"
+    assert captured["voice"] == edge_tts_voice("es")
+
+
+def test_tts_fallback_reuses_explicit_edge_voice(client, monkeypatch):
+    def fake_post(url, headers=None, json=None, timeout=None):
+        assert json["voice"] == appmod.TTS_VOICE
+        raise appmod.requests.RequestException("kokoro down")
+    captured = {}
+    def fake_edge(text, voice=None):
+        captured["voice"] = voice
+        return b"EDGE_MP3"
+    monkeypatch.setattr(appmod.requests, "post", fake_post)
+    monkeypatch.setattr(appmod, "tts_via_edge", fake_edge)
+    r = client.post("/api/tts", json={
+        "text": "Hello",
+        "lang": "en",
+        "edgeVoice": "en-US-AvaNeural",
+    })
+    assert r.status_code == 200
+    assert captured["voice"] == "en-US-AvaNeural"
+
+
+def test_tts_http_error_falls_back_to_edge(client, monkeypatch):
+    class FakeResp:
+        status_code = 502
+        def raise_for_status(self):
+            err = appmod.requests.HTTPError("bad gateway")
+            err.response = self
+            raise err
+    monkeypatch.setattr(appmod.requests, "post", lambda *a, **k: FakeResp())
+    monkeypatch.setattr(appmod, "tts_via_edge", lambda *a, **k: b"EDGE_MP3")
+    r = client.post("/api/tts", json={"text": "Hello"})
+    assert r.status_code == 200
+    assert r.data == b"EDGE_MP3"
+
+
+def test_tts_client_error_does_not_fall_back(client, monkeypatch):
+    class FakeResp:
+        status_code = 400
+        def raise_for_status(self):
+            err = appmod.requests.HTTPError("bad request")
+            err.response = self
+            raise err
+    monkeypatch.setattr(appmod.requests, "post", lambda *a, **k: FakeResp())
+    monkeypatch.setattr(appmod, "tts_via_edge", lambda *a, **k: b"EDGE_MP3")
+    r = client.post("/api/tts", json={"text": "Hello", "voice": "bad_voice"})
+    assert r.status_code == 400
+    assert r.get_json()["error"] == "invalid voice"
+
+def test_tts_429_uses_edge_fallback(client, monkeypatch):
+    class FakeResp:
+        status_code = 429
+        def raise_for_status(self):
+            err = appmod.requests.HTTPError("too many requests")
+            err.response = self
+            raise err
+    monkeypatch.setattr(appmod.requests, "post", lambda *a, **k: FakeResp())
+    monkeypatch.setattr(appmod, "tts_via_edge", lambda *a, **k: b"EDGE_MP3")
+    r = client.post("/api/tts", json={"text": "Hello"})
+    assert r.status_code == 200
+    assert r.data == b"EDGE_MP3"
+
+def test_tts_arabic_uses_env_default_edge_voice(client, monkeypatch):
+    captured = {}
+    def fake_edge(text, voice=None):
+        captured["voice"] = voice
+        return b"EDGE_MP3"
+    monkeypatch.setattr(appmod, "TTS_AR_VOICE", "ar-SA-SalmaNeural")
+    monkeypatch.setattr(appmod, "tts_via_edge", fake_edge)
+    r = client.post("/api/tts", json={"text": "مرحبا", "lang": "ar"})
+    assert r.status_code == 200
+    assert captured["voice"] == "ar-SA-SalmaNeural"
+
+
+def test_tts_empty_kokoro_audio_falls_back(client, monkeypatch):
+    class FakeResp:
+        content = b""
+        def raise_for_status(self): pass
+    monkeypatch.setattr(appmod.requests, "post", lambda *a, **k: FakeResp())
+    monkeypatch.setattr(appmod, "tts_via_edge", lambda *a, **k: b"EDGE_MP3")
+    r = client.post("/api/tts", json={"text": "Hello"})
+    assert r.status_code == 200
+    assert r.data == b"EDGE_MP3"
 
 def test_tts_truncates_long_text(client, monkeypatch):
     captured = {}
