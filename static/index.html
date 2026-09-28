@@ -1171,6 +1171,11 @@ async function speak(text){
     try{
       await audioEl.play();
     }catch(e){
+      try{
+        URL.revokeObjectURL(url);
+        if(lastAudioUrl === url) lastAudioUrl = null;
+      }catch(_e){}
+      audioEl = null;
       handleVoicePlaybackBlocked();
       return;
     }
