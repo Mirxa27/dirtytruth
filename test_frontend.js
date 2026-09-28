@@ -297,6 +297,7 @@ S.voice = true; els["voiceToggle"].classList.add("on");
 sandbox.handleVoiceFailure();
 check("voice failure disables voice toggle", S.voice === false && !els["voiceToggle"].classList.contains("on"));
 check("voice failure downgrades setup summary", els["setupSummary"].textContent.includes("🔇"));
+check("voice failure shows persistent notice", !els["voiceNotice"].classList.contains("hidden") && els["voiceNotice"].textContent.includes("continuing silently"));
 
 /* ---- 15. room mirror (v5.2): guests see challenges, steps, round ends ---- */
 console.log("\n[room mirror]");

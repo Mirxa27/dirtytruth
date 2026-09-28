@@ -263,6 +263,7 @@
     <div class="statusline" id="aiSettingsStatus" data-i18n="aiStatusReady">Using Venice by default. Open settings only if you want your own provider details.</div>
     <div class="muted-note" data-i18n="aiSettingsNote" style="margin-top:8px">Leave the API key blank to use the default Venice setup. Custom API keys stay only in this tab; saved URL/model settings stay on this device.</div>
   </div>
+  <div class="card hidden" id="voiceNotice" role="status" aria-live="polite" style="padding:10px 14px;font-size:.82rem"></div>
 
   <!-- SETUP -->
   <div class="card" id="setupCard">
@@ -1106,12 +1107,23 @@ function confettiLoop(){
    ========================================================================= */
 let audioEl = null, lastAudioUrl = null;
 let voiceIssueShown = false;
+function setVoiceNotice(msg){
+  const el = $("#voiceNotice"); if(!el) return;
+  if(msg){
+    el.textContent = msg;
+    el.classList.remove("hidden");
+  } else {
+    el.textContent = "";
+    el.classList.add("hidden");
+  }
+}
 function handleVoiceFailure(){
   if(!state.voice) return;
   state.voice = false;
   const tgl = $("#voiceToggle"); if(tgl) tgl.classList.remove("on");
   saveState();
   renderSetupSummary();
+  setVoiceNotice("🎙️ Voice unavailable — continuing silently.");
   if(!voiceIssueShown){
     voiceIssueShown = true;
     toast("🎙️ Voice unavailable — continuing silently.");
@@ -1132,6 +1144,7 @@ async function speak(text){
     audioEl.addEventListener("ended", () => { try{ URL.revokeObjectURL(url); }catch(e){} });
     await audioEl.play();
     voiceIssueShown = false;
+    setVoiceNotice("");
   }catch(e){ handleVoiceFailure(); }
 }
 
@@ -2297,7 +2310,12 @@ $("#chatInput").addEventListener("keydown", e => { if(e.key === "Enter") sendCha
    ========================================================================= */
 $("#voiceToggle").addEventListener("click", () => {
   state.voice = !state.voice;
-  if(state.voice) voiceIssueShown = false;
+  if(state.voice){
+    voiceIssueShown = false;
+    setVoiceNotice("");
+  } else {
+    setVoiceNotice("");
+  }
   $("#voiceToggle").classList.toggle("on", state.voice);
   saveState();
   renderSetupSummary();
