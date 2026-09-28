@@ -203,6 +203,8 @@
   .statusline{font-size:.78rem;color:var(--dim);margin-top:8px;line-height:1.4}
   .statusline.ok{color:#8ff1b8}
   .statusline.warn{color:#fbbf24}
+  .setup-summary{margin-top:10px;padding:10px 12px;border-radius:12px;background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.18)}
+  .load-detail{margin-top:10px;font-size:.8rem;color:var(--dim);line-height:1.4}
 
   /* entrance animation */
   .card.enter{animation:enter .4s ease}
@@ -324,6 +326,7 @@
       <div class="toggle on" id="escalateToggle"><span class="ico">🌡️</span><span data-i18n="autoEscalate">Auto-escalate</span></div>
     </div>
     <div style="font-size:.72rem;color:var(--dim);margin-top:10px;line-height:1.4" data-i18n="helpText">Spin the bottle, then choose truth or dare. Mid-game you swear The Oath — and skipping or refusing any task costs $100.</div>
+    <div class="statusline setup-summary" id="setupSummary"></div>
     <div style="height:14px"></div>
     <button class="btn" id="startBtn" data-i18n="start">Start the game 🔥</button>
   </div>
@@ -396,6 +399,7 @@
       <span class="cassia-busy">💋</span>
       <div class="spinner"></div>
       <div class="load-line" id="loadLine"></div>
+      <div class="load-detail" id="loadDetail"></div>
     </div>
 
     <!-- CHALLENGE -->
@@ -931,6 +935,7 @@ function applyLang(){
   // refresh visible challenge copy in the new language — NEVER replay its TTS
   if(state.challenge) renderChallenge({silent:true});
   if(!state.oathSworn && state.round === OATH_ROUND) showOath(true);
+  renderSetupSummary();
 }
 
 /* =========================================================================
@@ -1100,11 +1105,23 @@ function confettiLoop(){
    TTS
    ========================================================================= */
 let audioEl = null, lastAudioUrl = null;
+let voiceIssueShown = false;
+function handleVoiceFailure(){
+  if(!state.voice) return;
+  state.voice = false;
+  const tgl = $("#voiceToggle"); if(tgl) tgl.classList.remove("on");
+  saveState();
+  renderSetupSummary();
+  if(!voiceIssueShown){
+    voiceIssueShown = true;
+    toast("🎙️ Voice unavailable — continuing silently.");
+  }
+}
 async function speak(text){
   if(!state.voice || !text) return;
   try{
     const r = await fetch("/api/tts", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({text, lang: uiLang})});
-    if(!r.ok) return;
+    if(!r.ok){ handleVoiceFailure(); return; }
     const blob = await r.blob();
     if(audioEl) audioEl.pause();
     if(lastAudioUrl){ try{ URL.revokeObjectURL(lastAudioUrl); }catch(e){} }
@@ -1113,8 +1130,9 @@ async function speak(text){
     audioEl = new Audio(url);
     // release the blob once it has played — long sessions would otherwise leak
     audioEl.addEventListener("ended", () => { try{ URL.revokeObjectURL(url); }catch(e){} });
-    audioEl.play().catch(()=>{});
-  }catch(e){}
+    await audioEl.play();
+    voiceIssueShown = false;
+  }catch(e){ handleVoiceFailure(); }
 }
 
 /* =========================================================================
@@ -1638,6 +1656,30 @@ function readSetup(){
     p2: {name: $("#p2name").value.trim() || "Player 2", gender: g2?g2.dataset.g:"partner"},
   };
 }
+function updateStartButton(){
+  const btn = $("#startBtn"); if(!btn) return;
+  const mode = document.querySelector("#modeSel button.sel")?.dataset.mode || "solo";
+  const joining = !!$("#joinCode").value.trim();
+  if(mode === "room"){
+    btn.textContent = joining ? "📲 Join room" : "📤 Create room";
+  } else {
+    btn.textContent = t("start");
+  }
+}
+function renderSetupSummary(){
+  const el = $("#setupSummary"); if(!el) return;
+  const {p1, p2} = readSetup();
+  const mode = document.querySelector("#modeSel button.sel")?.dataset.mode || "solo";
+  const heat = +$("#heatRange").value || state.heat || 2;
+  const heatName = ((t("heatNames") || [])[heat] || "").trim();
+  const modeBadge = mode === "room" ? ($("#joinCode").value.trim() ? "📲" : "🏠") : "📱";
+  const voiceBadge = state.voice ? "🎙️" : "🔇";
+  const autoBadge = state.autoEscalate ? "↗️" : "⏸️";
+  el.className = "statusline setup-summary" + (!state.voice ? " warn" : "");
+  el.textContent = `${modeBadge} ${p1.name} + ${p2.name} · 🔥 ${heat}/10 ${heatName} · ${voiceBadge} · ${autoBadge}`;
+  updateStartButton();
+}
+window.renderSetupSummary = renderSetupSummary;
 function readPrefs(){
   const {p1, p2} = readSetup();
   return {
@@ -1734,12 +1776,20 @@ $("#shareLinkBtn").addEventListener("click", () => {
    Loading — shown while Cassia crafts a challenge
    ========================================================================= */
 let loadTimer = null;
-function startLoading(){
+function renderLoadingDetail(chosen){
+  const detail = $("#loadDetail"); if(!detail) return;
+  const heatName = (t("heatNames") || [])[state.heat] || "";
+  const who = state.target && state.target.name ? state.target.name : "…";
+  const what = chosen === "truth" ? t("truth") : t("dare");
+  detail.textContent = `${who} · ${what} · 🔥 ${state.heat}/10 ${heatName}`.trim();
+}
+function startLoading(chosen){
   const lines = t("loadLines") || ["…"];
   $("#loadingCard").classList.remove("hidden");
   $("#loadingCard").classList.add("enter");
   let i = 0;
   $("#loadLine").textContent = lines[0];
+  renderLoadingDetail(chosen);
   clearInterval(loadTimer);
   loadTimer = setInterval(() => { i = (i+1) % lines.length; $("#loadLine").textContent = lines[i]; }, 1100);
   state.generating = true;
@@ -1748,6 +1798,7 @@ function startLoading(){
 function stopLoading(){
   clearInterval(loadTimer); loadTimer = null;
   $("#loadingCard").classList.add("hidden");
+  $("#loadDetail").textContent = "";
   state.generating = false;
   if(!$("#gameUI").classList.contains("hidden")) $("#spinBtn").disabled = false;
   if(state.roomCode) startRoomPolling();
@@ -1899,7 +1950,7 @@ $("#dareBtn").addEventListener("click", () => pickType("dare"));
    ========================================================================= */
 async function generateChallenge(chosen){
   if(state.generating) return null;
-  startLoading();
+  startLoading(chosen);
   $("#spinStatus").textContent = "";
   const body = {
     players: state.players, chosen, target: state.target.name,
@@ -2246,15 +2297,18 @@ $("#chatInput").addEventListener("keydown", e => { if(e.key === "Enter") sendCha
    ========================================================================= */
 $("#voiceToggle").addEventListener("click", () => {
   state.voice = !state.voice;
+  if(state.voice) voiceIssueShown = false;
   $("#voiceToggle").classList.toggle("on", state.voice);
   saveState();
+  renderSetupSummary();
 });
 $("#escalateToggle").addEventListener("click", () => {
   state.autoEscalate = !state.autoEscalate;
   $("#escalateToggle").classList.toggle("on", state.autoEscalate);
   saveState();
+  renderSetupSummary();
 });
-$("#heatRange").addEventListener("input", e => { state.heat = +e.target.value; updateHeatLabel(); renderPhase(); });
+$("#heatRange").addEventListener("input", e => { state.heat = +e.target.value; updateHeatLabel(); renderPhase(); renderSetupSummary(); });
 $("#heatRange2").addEventListener("input", e => { state.heat = +e.target.value; updateHeatLabel(); renderPhase(); saveState(); if(state.roomCode) roomAction("set_heat", {heat: state.heat}); });
 
 /* =========================================================================
@@ -2264,6 +2318,7 @@ document.querySelectorAll(".genders[data-for] button").forEach(b => {
   b.addEventListener("click", () => {
     b.parentElement.querySelectorAll("button").forEach(x=>x.classList.remove("sel"));
     b.classList.add("sel");
+    renderSetupSummary();
   });
 });
 document.querySelectorAll("#modeSel button").forEach(b => {
@@ -2273,7 +2328,11 @@ document.querySelectorAll("#modeSel button").forEach(b => {
     const isRoom = b.dataset.mode === "room";
     $("#roomHost").classList.toggle("hidden", !isRoom);
     $("#roomJoin").classList.toggle("hidden", !isRoom);
+    renderSetupSummary();
   });
+});
+["#p1name","#p2name","#joinCode"].forEach(sel => {
+  $(sel).addEventListener("input", renderSetupSummary);
 });
 
 /* =========================================================================
@@ -2317,6 +2376,7 @@ buildLangSelect();
 bindAiSettings();
 setAiSettingsOpen(false);
 applyLang();
+renderSetupSummary();
 bootstrapAiSettings().catch(()=>{});
 async function enterGameUI(resumeRoomText){
   $("#setupCard").classList.add("hidden");
@@ -2392,6 +2452,7 @@ async function resumeRoomSession(){
   $("#roomJoin").classList.remove("hidden");
   $("#joinCode").value = code;
   try{ history.replaceState(null, "", location.pathname); }catch(e){}
+  renderSetupSummary();
   toast(t("joinLinkTitle"));
 })();
 </script>

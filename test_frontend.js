@@ -270,6 +270,34 @@ check("manifest references icon.svg", Array.isArray(man.icons) && man.icons.some
 check("icon.svg exists and is svg", fs.readFileSync(path.join(__dirname, "static", "icon.svg"), "utf8").includes("<svg"));
 check("index.html links manifest", html.includes('rel="manifest"'));
 
+/* ---- 14.5 setup + loading UX polish ---- */
+console.log("\n[setup + loading ux]");
+els["p1name"].value = "Alex";
+els["p2name"].value = "Sam";
+els["heatRange"].value = 7;
+S.voice = true; S.autoEscalate = false;
+sandbox.renderSetupSummary();
+check("setup summary reflects names", els["setupSummary"].textContent.includes("Alex + Sam"));
+check("setup summary reflects heat", els["setupSummary"].textContent.includes("7/10"));
+check("setup summary reflects muted auto-escalate badge", els["setupSummary"].textContent.includes("⏸️"));
+check("solo mode keeps default CTA", els["startBtn"].textContent === sandbox.t("start"));
+const modeSel = sandbox.document.querySelector("#modeSel button.sel");
+modeSel.dataset.mode = "room";
+els["joinCode"].value = "KISS";
+sandbox.renderSetupSummary();
+check("room join mode updates CTA", els["startBtn"].textContent.includes("Join room"));
+S.target = { name: "Sam" }; S.heat = 6;
+sandbox.startLoading("dare");
+check("loading detail shows target", els["loadDetail"].textContent.includes("Sam"));
+check("loading detail shows type", els["loadDetail"].textContent.includes(sandbox.t("dare")));
+check("loading detail shows heat", els["loadDetail"].textContent.includes("6/10"));
+sandbox.stopLoading();
+check("loading detail clears after stop", els["loadDetail"].textContent === "");
+S.voice = true; els["voiceToggle"].classList.add("on");
+sandbox.handleVoiceFailure();
+check("voice failure disables voice toggle", S.voice === false && !els["voiceToggle"].classList.contains("on"));
+check("voice failure downgrades setup summary", els["setupSummary"].textContent.includes("🔇"));
+
 /* ---- 15. room mirror (v5.2): guests see challenges, steps, round ends ---- */
 console.log("\n[room mirror]");
 sandbox.fetch = async (url, init) => {
