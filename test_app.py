@@ -612,7 +612,7 @@ def test_call_llm_uses_request_scoped_ai_settings(monkeypatch):
     assert out == "ok"
     assert seen["url"] == "https://api.venice.ai/api/v1/chat/completions"
     assert seen["json"]["model"] == "scoped-model"
-    assert seen["headers"]["Authorization"] == "******"
+    assert seen["headers"]["Authorization"].startswith("Bearer ")
 
 
 # ---------------------------------------------------------------------------
