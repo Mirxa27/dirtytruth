@@ -226,7 +226,7 @@ sandbox.window.setUiLang("en");
 
 /* ---- 10. v5.1 i18n parity (new keys in every language) ---- */
 console.log("\n[v5.1 i18n parity]");
-const NEW_KEYS = ["roomWatching","roomGone","resynced","spinSpinning","craftTruth","craftDare","netFail","skipConfirm","refuseConfirm"];
+const NEW_KEYS = ["roomWatching","roomGone","resynced","spinSpinning","craftTruth","craftDare","netFail","skipConfirm","refuseConfirm","createRoomCta","joinRoomCta"];
 const LANGS = ["en","es","fr","de","it","pt","hi","ja","zh","ar"];
 check("all langs have new v5.1 keys", LANGS.every(l => NEW_KEYS.every(k =>
   typeof I18N[l][k] === "string" && I18N[l][k].length > 0)));
@@ -302,6 +302,10 @@ S.voice = true; els["voiceToggle"].classList.add("on");
 sandbox.handleVoicePlaybackBlocked();
 check("playback block keeps voice enabled", S.voice === true && els["voiceToggle"].classList.contains("on"));
 check("playback block shows retry notice", els["voiceNotice"].textContent.includes("allow voice playback"));
+S.voice = true; els["voiceToggle"].classList.add("on");
+sandbox.handleVoiceLineIssue();
+check("line issue keeps voice enabled", S.voice === true && els["voiceToggle"].classList.contains("on"));
+check("line issue shows per-line notice", els["voiceNotice"].textContent.includes("Voice skipped"));
 
 /* ---- 15. room mirror (v5.2): guests see challenges, steps, round ends ---- */
 console.log("\n[room mirror]");
