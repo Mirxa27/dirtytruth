@@ -1186,7 +1186,9 @@ async function speak(text){
       return;
     }
     voicePlayBlockedShown = false;
-    showVoiceNotice("");
+    if(voiceNoticeKey === "voicePlaybackBlocked" || voiceNoticeKey === "voiceLineSkipped"){
+      showVoiceNotice("");
+    }
   }catch(e){ handleVoiceLineIssue(); }
 }
 
