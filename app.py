@@ -74,6 +74,10 @@ BLOCKED_LLM_HOSTS = {"localhost", "0.0.0.0"}
 BLOCKED_LLM_SUFFIXES = (".local", ".internal", ".lan", ".home", ".arpa")
 
 
+class TTSUpstreamError(RuntimeError):
+    """Raised when an upstream TTS provider is unavailable."""
+
+
 def _resolve_public_host(host, port):
     """Resolve `host` and return only globally-routable addresses."""
     try:
@@ -261,14 +265,20 @@ def tts_via_edge(text, voice=None):
 
 def tts_via_kokoro(text, voice):
     """Synthesize `text` with Kokoro; returns MP3 bytes or raises on failure."""
-    r = requests.post(
-        TTS_URL,
-        headers={"Authorization": "******", "Content-Type": "application/json"},
-        json={"model": "kokoro", "voice": voice, "input": text},
-        timeout=60,
-    )
-    r.raise_for_status()
-    return r.content
+    try:
+        r = requests.post(
+            TTS_URL,
+            headers={"Authorization": "******", "Content-Type": "application/json"},
+            json={"model": "kokoro", "voice": voice, "input": text},
+            timeout=60,
+        )
+        r.raise_for_status()
+    except requests.RequestException as e:
+        raise TTSUpstreamError("kokoro unavailable") from e
+    audio = getattr(r, "content", b"") or b""
+    if not audio:
+        raise TTSUpstreamError("kokoro unavailable")
+    return audio
 
 
 # ---------------------------------------------------------------------------
@@ -663,7 +673,7 @@ def tts():
     try:
         audio = tts_via_kokoro(text, voice)
         return audio, 200, {"Content-Type": "audio/mpeg", "Cache-Control": "no-store"}
-    except requests.RequestException:
+    except TTSUpstreamError:
         pass
     audio = tts_via_edge(text, voice=edge_voice)
     if audio:
