@@ -1238,7 +1238,6 @@ function saveAiSettings(){
     localStorage.setItem(AI_SAVE_KEY, JSON.stringify({
       providerUrl: state.ai.providerUrl,
       model: state.ai.model,
-      models: state.ai.models,
     }));
   }catch(e){}
 }
@@ -1249,7 +1248,7 @@ function loadAiSettings(){
     state.ai = Object.assign(state.ai, {
       providerUrl: s.providerUrl || state.ai.providerUrl,
       model: s.model || state.ai.model,
-      models: Array.isArray(s.models) ? s.models.slice(0, 200) : state.ai.models,
+      models: [],
     });
     return true;
   }catch(e){ return false; }
@@ -1310,8 +1309,14 @@ async function bootstrapAiSettings(){
   renderAiSettings();
   try{
     const cfg = await api("/api/ai/config", null, "GET", 15000);
-    state.ai.providerUrl = state.ai.providerUrl || cfg.provider_url || "";
-    state.ai.model = state.ai.model || cfg.model || "";
+    const providerChanged = !!(cfg.provider_url && state.ai.providerUrl && state.ai.providerUrl !== cfg.provider_url);
+    state.ai.providerUrl = cfg.provider_url || state.ai.providerUrl || "";
+    if(providerChanged){
+      state.ai.model = cfg.model || "";
+      state.ai.models = [];
+    }else{
+      state.ai.model = state.ai.model || cfg.model || "";
+    }
     state.ai.apiKeyConfigured = !!cfg.apiKeyConfigured;
     renderAiSettings();
     saveAiSettings();
