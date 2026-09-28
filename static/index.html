@@ -1151,8 +1151,7 @@ async function speak(text){
   try{
     const r = await fetch("/api/tts", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({text, lang: uiLang})});
     if(!r.ok){
-      if(r.status >= 500){ handleVoiceFailure(); }
-      else { handleVoiceLineIssue(); }
+      handleVoiceLineIssue();
       return;
     }
     const blob = await r.blob();
@@ -1172,7 +1171,7 @@ async function speak(text){
     voiceIssueShown = false;
     voicePlayBlockedShown = false;
     showVoiceNotice("");
-  }catch(e){ handleVoiceFailure(); }
+  }catch(e){ handleVoiceLineIssue(); }
 }
 
 /* =========================================================================
