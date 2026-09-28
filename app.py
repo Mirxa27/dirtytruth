@@ -9,6 +9,7 @@ from urllib.parse import urlparse, urlunparse
 import threading
 import time
 import requests
+import urllib3
 from flask import Flask, request, jsonify, send_from_directory
 
 from game_logic import (
@@ -73,23 +74,91 @@ BLOCKED_LLM_HOSTS = {"localhost", "0.0.0.0"}
 BLOCKED_LLM_SUFFIXES = (".local", ".internal", ".lan", ".home", ".arpa")
 
 
-def _assert_public_host(host, port):
-    """Reject loopback/private/reserved IPs even after DNS resolution."""
+def _resolve_public_host(host, port):
+    """Resolve `host` and return only globally-routable addresses."""
     try:
         infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     except socket.gaierror as e:
         raise ValueError("AI provider host could not be resolved") from e
     if not infos:
         raise ValueError("AI provider host could not be resolved")
+    out, seen = [], set()
     for info in infos:
         addr = info[4][0]
         try:
             ip = ipaddress.ip_address(addr)
         except ValueError as e:
             raise ValueError("AI provider host is not allowed") from e
-        if (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast
-                or ip.is_reserved or ip.is_unspecified):
+        if not ip.is_global:
             raise ValueError("AI provider host is not allowed")
+        if addr not in seen:
+            seen.add(addr)
+            out.append(addr)
+    return out
+
+
+def _assert_public_host(host, port):
+    """Reject loopback/private/reserved IPs even after DNS resolution."""
+    _resolve_public_host(host, port)
+
+
+def _trusted_llm_url(value):
+    """Allow request-scoped overrides only for the configured provider origin."""
+    normalized = _normalize_llm_url(value)
+    parsed = urlparse(normalized)
+    base = urlparse(LLM_URL)
+    if (
+        (parsed.hostname or "").lower() != (base.hostname or "").lower()
+        or (parsed.port or 443) != (base.port or 443)
+    ):
+        raise ValueError("AI provider host is not allowed")
+    return normalized
+
+
+def _pinned_json_request(method, url, headers=None, json_body=None, timeout=30):
+    """Perform an HTTPS request pinned to already-validated DNS results."""
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").strip().lower()
+    port = parsed.port or 443
+    if parsed.scheme != "https" or not host:
+        raise ValueError("AI provider URL must use https")
+    path = parsed.path or "/"
+    if parsed.query:
+        path += "?" + parsed.query
+    request_headers = dict(headers or {})
+    request_headers["Host"] = host if port == 443 else f"{host}:{port}"
+    body = None
+    if json_body is not None:
+        body = json.dumps(json_body).encode("utf-8")
+        request_headers.setdefault("Content-Type", "application/json")
+    last_err = None
+    for addr in _resolve_public_host(host, port):
+        pool = urllib3.HTTPSConnectionPool(
+            addr,
+            port=port,
+            maxsize=1,
+            block=True,
+            assert_hostname=host,
+            server_hostname=host,
+            cert_reqs="CERT_REQUIRED",
+        )
+        try:
+            resp = pool.urlopen(
+                method,
+                path,
+                body=body,
+                headers=request_headers,
+                timeout=urllib3.Timeout(total=timeout),
+                retries=False,
+            )
+            if resp.status >= 400:
+                raise RuntimeError(f"provider returned HTTP {resp.status}")
+            return json.loads(resp.data.decode("utf-8"))
+        except Exception as e:
+            last_err = e
+        finally:
+            pool.close()
+    raise RuntimeError(f"provider request failed: {last_err}")
 
 
 def _clean_model_name(value):
@@ -148,7 +217,7 @@ def get_ai_settings(raw=None):
     out = {"url": LLM_URL, "model": LLM_MODEL, "api_key": LLM_KEY}
     try:
         if str(raw.get("url", "")).strip():
-            out["url"] = _normalize_llm_url(raw.get("url"))
+            out["url"] = _trusted_llm_url(raw.get("url"))
     except ValueError:
         pass
     model = _clean_model_name(raw.get("model")) or out["model"]
@@ -190,6 +259,7 @@ def tts_via_edge(text, voice=None):
 RATE_LIMITS = {
     "/api/generate": int(os.environ.get("DT_RL_GENERATE", "12") or 0),   # per minute
     "/api/chat": int(os.environ.get("DT_RL_CHAT", "20") or 0),
+    "/api/ai/models": int(os.environ.get("DT_RL_AI_MODELS", "20") or 0),
     "/api/tts": int(os.environ.get("DT_RL_TTS", "20") or 0),
     # Room codes are only 4 chars (~1M combos) — keep join tight vs brute force.
     "/api/room/create": int(os.environ.get("DT_RL_ROOM_CREATE", "10") or 0),
@@ -444,14 +514,7 @@ def call_llm(payload, ai_settings=None, retries=3):
     last_err = None
     for attempt in range(retries):
         try:
-            r = requests.post(
-                ai["url"],
-                headers=headers,
-                json=payload,
-                timeout=120,
-            )
-            r.raise_for_status()
-            d = r.json()
+            d = _pinned_json_request("POST", ai["url"], headers=headers, json_body=payload, timeout=120)
             content = d["choices"][0]["message"]["content"]
             if content and content.strip():
                 return content
@@ -533,17 +596,17 @@ def ai_config():
 
 @app.route("/api/ai/models")
 def ai_models():
+    if _rate_limited("/api/ai/models"):
+        return _too_many()
     try:
-        url = _normalize_llm_url(request.args.get("url") or LLM_URL)
+        url = _trusted_llm_url(request.args.get("url") or LLM_URL)
     except ValueError:
         return jsonify({"error": "invalid provider url"}), 400
     if not LLM_KEY:
         return jsonify({"error": "LLM_KEY is not configured on the server"}), 503
     headers = {"Authorization": "Bearer " + LLM_KEY, "Content-Type": "application/json"}
     try:
-        r = requests.get(_models_url_for(url), headers=headers, timeout=30)
-        r.raise_for_status()
-        data = r.json().get("data")
+        data = _pinned_json_request("GET", _models_url_for(url), headers=headers, timeout=30).get("data")
         if not isinstance(data, list):
             raise RuntimeError("unexpected model response")
         models = sorted({

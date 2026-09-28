@@ -528,17 +528,16 @@ def fallback_challenge(chosen, heat, target, partner, recent_titles, avoid=None)
         return title, [{"instruction": q, "seconds": 45}]
     # dares
     pool = FALLBACK_DARES
-    candidates = _tier_candidates(tier)
-    fresh = []
-    for t in candidates:
+    for t in _tier_candidates(tier):
+        fresh = []
         for title, steps in pool.get(t, []):
             if blocked_out(title):
                 continue
             out = [{"instruction": i, "seconds": max(5, min(180, int(s)))} for i, s in steps]
             if out:
                 fresh.append((title, out))
-    if fresh:
-        return random.choice(fresh)
+        if fresh:
+            return random.choice(fresh)
     title, steps = random.choice(pool[tier])
     return title, [{"instruction": i, "seconds": max(5, min(180, int(s)))} for i, s in steps]
 

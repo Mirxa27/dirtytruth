@@ -35,18 +35,22 @@ def test_ai_config(client):
     assert d["model"]
 
 def test_ai_models(client, monkeypatch):
-    class FakeResp:
-        def raise_for_status(self): pass
-        def json(self):
-            return {"data": [{"id": "z-model"}, {"id": "a-model"}]}
     monkeypatch.setattr(appmod, "LLM_KEY", "secret")
     monkeypatch.setattr(appmod.socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("8.8.8.8", 443))])
-    monkeypatch.setattr(appmod.requests, "get", lambda *a, **k: FakeResp())
+    monkeypatch.setattr(appmod, "_pinned_json_request",
+                        lambda *a, **k: {"data": [{"id": "z-model"}, {"id": "a-model"}]})
     r = client.get("/api/ai/models?url=https://api.venice.ai/api/v1/chat/completions")
     assert r.status_code == 200
     d = r.get_json()
     assert d["models"] == ["a-model", "z-model"]
     assert d["apiKeyConfigured"] is True
+
+def test_ai_models_rejects_untrusted_provider_url(client, monkeypatch):
+    monkeypatch.setattr(appmod, "LLM_KEY", "secret")
+    monkeypatch.setattr(appmod.socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("8.8.8.8", 443))])
+    r = client.get("/api/ai/models?url=https://evil.example/v1/chat/completions")
+    assert r.status_code == 400
+    assert r.get_json()["error"] == "invalid provider url"
 
 def test_index_serves_html(client):
     r = client.get("/")
@@ -571,24 +575,19 @@ def test_tts_truncates_long_text(client, monkeypatch):
 # ---------------------------------------------------------------------------
 def test_call_llm_retries_on_empty(monkeypatch):
     calls = {"n": 0}
-    class FakeResp:
-        status_code = 200
-        def raise_for_status(self): pass
-        def json(self):
-            return {"choices": [{"message": {"content": "" if calls["n"] < 2 else "ok"}, "finish_reason": "stop"}]}
-    def fake_post(url, headers=None, json=None, timeout=None):
+    def fake_request(method, url, headers=None, json_body=None, timeout=None):
         calls["n"] += 1
-        return FakeResp()
-    monkeypatch.setattr(appmod.requests, "post", fake_post)
+        return {"choices": [{"message": {"content": "" if calls["n"] < 2 else "ok"}, "finish_reason": "stop"}]}
+    monkeypatch.setattr(appmod, "_pinned_json_request", fake_request)
     monkeypatch.setattr(appmod.time, "sleep", lambda s: None)
     out = appmod.call_llm({"model": "x", "messages": []})
     assert out == "ok"
     assert calls["n"] == 2  # empty, empty, then success
 
 def test_call_llm_raises_after_retries(monkeypatch):
-    def fake_post(url, headers=None, json=None, timeout=None):
+    def fake_request(method, url, headers=None, json_body=None, timeout=None):
         raise RuntimeError("down")
-    monkeypatch.setattr(appmod.requests, "post", fake_post)
+    monkeypatch.setattr(appmod, "_pinned_json_request", fake_request)
     monkeypatch.setattr(appmod.time, "sleep", lambda s: None)
     try:
         appmod.call_llm({"model": "x", "messages": []})
@@ -598,14 +597,10 @@ def test_call_llm_raises_after_retries(monkeypatch):
 
 def test_call_llm_uses_request_scoped_ai_settings(monkeypatch):
     seen = {}
-    class FakeResp:
-        def raise_for_status(self): pass
-        def json(self):
-            return {"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]}
-    def fake_post(url, headers=None, json=None, timeout=None):
-        seen.update(url=url, headers=headers, json=json)
-        return FakeResp()
-    monkeypatch.setattr(appmod.requests, "post", fake_post)
+    def fake_request(method, url, headers=None, json_body=None, timeout=None):
+        seen.update(method=method, url=url, headers=headers, json=json_body, timeout=timeout)
+        return {"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]}
+    monkeypatch.setattr(appmod, "_pinned_json_request", fake_request)
     out = appmod.call_llm({"messages": []}, ai_settings={
         "url": "https://api.venice.ai/api/v1/chat/completions",
         "model": "scoped-model",
@@ -615,6 +610,50 @@ def test_call_llm_uses_request_scoped_ai_settings(monkeypatch):
     assert seen["url"] == "https://api.venice.ai/api/v1/chat/completions"
     assert seen["json"]["model"] == "scoped-model"
     assert seen["headers"]["Authorization"].startswith("Bearer ")
+
+def test_get_ai_settings_ignores_untrusted_provider_url(monkeypatch):
+    monkeypatch.setattr(appmod.socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("8.8.8.8", 443))])
+    base = "https://api.venice.ai/api/v1/chat/completions"
+    monkeypatch.setattr(appmod, "LLM_URL", base)
+    ai = appmod.get_ai_settings({"url": "https://evil.example/v1/chat/completions", "model": "custom"})
+    assert ai["url"] == base
+    assert ai["model"] == "custom"
+
+def test_pinned_json_request_uses_validated_address(monkeypatch):
+    seen = {}
+
+    class FakeResp:
+        status = 200
+        data = b'{"ok": true}'
+
+    class FakePool:
+        def __init__(self, host, port=None, **kwargs):
+            seen["pool"] = {"host": host, "port": port, **kwargs}
+        def urlopen(self, method, path, body=None, headers=None, timeout=None, retries=None):
+            seen["request"] = {
+                "method": method, "path": path, "body": body,
+                "headers": headers, "timeout": timeout, "retries": retries,
+            }
+            return FakeResp()
+        def close(self):
+            seen["closed"] = True
+
+    monkeypatch.setattr(appmod.socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("8.8.8.8", 443))])
+    monkeypatch.setattr(appmod.urllib3, "HTTPSConnectionPool", FakePool)
+    out = appmod._pinned_json_request(
+        "POST",
+        "https://api.venice.ai/v1/chat/completions",
+        headers={"Authorization": "******"},
+        json_body={"hello": "world"},
+        timeout=12,
+    )
+    assert out == {"ok": True}
+    assert seen["pool"]["host"] == "8.8.8.8"
+    assert seen["pool"]["assert_hostname"] == "api.venice.ai"
+    assert seen["pool"]["server_hostname"] == "api.venice.ai"
+    assert seen["request"]["headers"]["Host"] == "api.venice.ai"
+    assert json.loads(seen["request"]["body"].decode("utf-8")) == {"hello": "world"}
+    assert seen["closed"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -726,6 +765,20 @@ def test_rate_limit_forwarded_for_isolated_ips(client, monkeypatch):
         assert r2.status_code == 200
         r3 = client.post("/api/chat", json={"message": "hi"})
         assert r3.status_code == 429
+    finally:
+        appmod._rl_hits.clear()
+
+def test_ai_models_rate_limited(client, monkeypatch):
+    monkeypatch.setattr(appmod, "LLM_KEY", "secret")
+    monkeypatch.setattr(appmod, "RATE_LIMITS", {"/api/ai/models": 1})
+    monkeypatch.setattr(appmod.socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("8.8.8.8", 443))])
+    monkeypatch.setattr(appmod, "_pinned_json_request", lambda *a, **k: {"data": [{"id": "a-model"}]})
+    appmod._rl_hits.clear()
+    try:
+        assert client.get("/api/ai/models").status_code == 200
+        r = client.get("/api/ai/models")
+        assert r.status_code == 429
+        assert r.headers.get("Retry-After") == "60"
     finally:
         appmod._rl_hits.clear()
 
