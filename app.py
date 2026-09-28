@@ -687,7 +687,7 @@ def tts():
     except (TTSTransportError, TTSResponseError):
         pass
     except TTSClientError:
-        return jsonify({"error": "tts unavailable"}), 502
+        return jsonify({"error": "invalid voice"}), 400
     audio = tts_via_edge(text, voice=edge_voice)
     if audio:
         return audio, 200, {"Content-Type": "audio/mpeg", "Cache-Control": "no-store"}

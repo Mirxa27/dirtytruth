@@ -656,7 +656,8 @@ def test_tts_client_error_does_not_fall_back(client, monkeypatch):
     monkeypatch.setattr(appmod.requests, "post", lambda *a, **k: FakeResp())
     monkeypatch.setattr(appmod, "tts_via_edge", lambda *a, **k: b"EDGE_MP3")
     r = client.post("/api/tts", json={"text": "Hello", "voice": "bad_voice"})
-    assert r.status_code == 502
+    assert r.status_code == 400
+    assert r.get_json()["error"] == "invalid voice"
 
 
 def test_tts_empty_kokoro_audio_falls_back(client, monkeypatch):
