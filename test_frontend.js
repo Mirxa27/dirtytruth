@@ -198,6 +198,7 @@ check("saveAiSettings does not persist model list", !("models" in JSON.parse(loc
 check("loadAiSettings restores dedicated ai key", sandbox.window.loadAiSettings() === true && S.ai.model === "fresh-model");
 check("loadAiSettings clears stale model list", Array.isArray(S.ai.models) && S.ai.models.length === 0);
 check("normalizeAiProviderUrl canonicalizes shorthand paths", sandbox.window.normalizeAiProviderUrl("https://example.com/v1") === "https://example.com/v1/chat/completions");
+check("normalizeAiProviderUrl preserves explicit ports", sandbox.window.normalizeAiProviderUrl("https://example.com:8443/v1") === "https://example.com:8443/v1/chat/completions");
 
 /* ---- 8. esc ---- */
 check("esc escapes html", sandbox.window.esc('<b>"x"</b>') === "&lt;b&gt;&quot;x&quot;&lt;/b&gt;");

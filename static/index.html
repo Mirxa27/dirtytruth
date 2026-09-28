@@ -1273,7 +1273,7 @@ function renderAiSettings(){
 }
 function normalizeAiProviderUrl(url){
   const raw = String(url || "").trim();
-  const m = raw.match(/^(https:\/\/[^/?#]+)(\/[^?#]*)?/i);
+  const m = raw.match(/^(https:\/\/[^/:?#]+(?::\d+)?)(\/[^?#]*)?/i);
   if(!m) return "";
   let path = (m[2] || "").replace(/\/+$/, "");
   if(!path) path = "/v1/chat/completions";
