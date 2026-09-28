@@ -631,6 +631,16 @@ def test_tts_fallback_reuses_explicit_edge_voice(client, monkeypatch):
     assert r.status_code == 200
     assert captured["voice"] == "en-US-AvaNeural"
 
+
+def test_tts_empty_kokoro_audio_does_not_fall_back(client, monkeypatch):
+    class FakeResp:
+        content = b""
+        def raise_for_status(self): pass
+    monkeypatch.setattr(appmod.requests, "post", lambda *a, **k: FakeResp())
+    monkeypatch.setattr(appmod, "tts_via_edge", lambda *a, **k: b"EDGE_MP3")
+    r = client.post("/api/tts", json={"text": "Hello"})
+    assert r.status_code == 502
+
 def test_tts_truncates_long_text(client, monkeypatch):
     captured = {}
     class FakeResp:

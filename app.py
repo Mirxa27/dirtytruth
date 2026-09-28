@@ -74,8 +74,12 @@ BLOCKED_LLM_HOSTS = {"localhost", "0.0.0.0"}
 BLOCKED_LLM_SUFFIXES = (".local", ".internal", ".lan", ".home", ".arpa")
 
 
-class TTSUpstreamError(RuntimeError):
-    """Raised when an upstream TTS provider is unavailable."""
+class TTSTransportError(RuntimeError):
+    """Raised when an upstream TTS provider cannot be reached."""
+
+
+class TTSResponseError(RuntimeError):
+    """Raised when an upstream TTS provider returns unusable audio."""
 
 
 def _resolve_public_host(host, port):
@@ -274,10 +278,10 @@ def tts_via_kokoro(text, voice):
         )
         r.raise_for_status()
     except requests.RequestException as e:
-        raise TTSUpstreamError("kokoro unavailable") from e
+        raise TTSTransportError("kokoro unavailable") from e
     audio = getattr(r, "content", b"") or b""
     if not audio:
-        raise TTSUpstreamError("kokoro unavailable")
+        raise TTSResponseError("kokoro returned empty audio")
     return audio
 
 
@@ -673,8 +677,10 @@ def tts():
     try:
         audio = tts_via_kokoro(text, voice)
         return audio, 200, {"Content-Type": "audio/mpeg", "Cache-Control": "no-store"}
-    except TTSUpstreamError:
+    except TTSTransportError:
         pass
+    except TTSResponseError:
+        return jsonify({"error": "tts unavailable"}), 502
     audio = tts_via_edge(text, voice=edge_voice)
     if audio:
         return audio, 200, {"Content-Type": "audio/mpeg", "Cache-Control": "no-store"}
