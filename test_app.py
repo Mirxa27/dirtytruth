@@ -587,7 +587,7 @@ def test_tts_success(client, monkeypatch):
 
 def test_tts_upstream_failure(client, monkeypatch):
     def fake_post(url, headers=None, json=None, timeout=None):
-        raise RuntimeError("tts down")
+        raise appmod.requests.RequestException("tts down")
     monkeypatch.setattr(appmod.requests, "post", fake_post)
     monkeypatch.setattr(appmod, "tts_via_edge", lambda *a, **k: None)
     r = client.post("/api/tts", json={"text": "Hello"})
@@ -597,7 +597,7 @@ def test_tts_upstream_failure(client, monkeypatch):
 def test_tts_falls_back_to_edge_when_kokoro_fails(client, monkeypatch):
     from languages import edge_tts_voice
     def fake_post(url, headers=None, json=None, timeout=None):
-        raise RuntimeError("kokoro down")
+        raise appmod.requests.RequestException("kokoro down")
     captured = {}
     def fake_edge(text, voice=None):
         captured["text"] = text
@@ -616,7 +616,7 @@ def test_tts_falls_back_to_edge_when_kokoro_fails(client, monkeypatch):
 def test_tts_fallback_reuses_explicit_edge_voice(client, monkeypatch):
     def fake_post(url, headers=None, json=None, timeout=None):
         assert json["voice"] == appmod.TTS_VOICE
-        raise RuntimeError("kokoro down")
+        raise appmod.requests.RequestException("kokoro down")
     captured = {}
     def fake_edge(text, voice=None):
         captured["voice"] = voice

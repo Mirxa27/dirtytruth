@@ -663,7 +663,7 @@ def tts():
     try:
         audio = tts_via_kokoro(text, voice)
         return audio, 200, {"Content-Type": "audio/mpeg", "Cache-Control": "no-store"}
-    except Exception:
+    except requests.RequestException:
         pass
     audio = tts_via_edge(text, voice=edge_voice)
     if audio:
