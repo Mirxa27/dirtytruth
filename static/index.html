@@ -1211,7 +1211,7 @@ function saveState(){
       voice: state.voice, autoEscalate: state.autoEscalate,
       oathSworn: state.oathSworn, ledger: state.ledger, prefs: state.prefs,
       mode: state.mode, roomCode: state.roomCode, role: state.role,
-      seen: state.seen, answers: state.answers, ai: state.ai,
+      seen: state.seen, answers: state.answers,
     }));
   }catch(e){}
 }
@@ -1229,7 +1229,6 @@ function loadState(){
     state.role = s.role || null;
     state.seen = Array.isArray(s.seen) ? s.seen.slice(-80) : [];
     state.answers = (s.answers && typeof s.answers === "object") ? s.answers : {};
-    if(s.ai && typeof s.ai === "object") state.ai = Object.assign(state.ai, s.ai);
     return true;
   }catch(e){ return false; }
 }
@@ -1240,7 +1239,6 @@ function saveAiSettings(){
       providerUrl: state.ai.providerUrl,
       model: state.ai.model,
       models: state.ai.models,
-      apiKeyConfigured: state.ai.apiKeyConfigured,
     }));
   }catch(e){}
 }
@@ -1252,7 +1250,6 @@ function loadAiSettings(){
       providerUrl: s.providerUrl || state.ai.providerUrl,
       model: s.model || state.ai.model,
       models: Array.isArray(s.models) ? s.models.slice(0, 200) : state.ai.models,
-      apiKeyConfigured: s.apiKeyConfigured === true,
     });
     return true;
   }catch(e){ return false; }
@@ -1290,7 +1287,12 @@ async function refreshAiModels(opts){
   saveAiSettings();
   renderAiStatus(t("aiStatusLoading"));
   try{
-    const d = await api(`/api/ai/models?url=${encodeURIComponent(url)}`, null, "GET", 30000);
+    const r = await fetch(`/api/ai/models?url=${encodeURIComponent(url)}`, {method:"GET", headers:{"Accept":"application/json"}});
+    const d = await r.json().catch(() => ({}));
+    if(!r.ok){
+      state.ai.apiKeyConfigured = d.apiKeyConfigured !== false && r.status !== 503;
+      throw new Error(d.error || ("http " + r.status));
+    }
     state.ai.models = Array.isArray(d.models) ? d.models.slice(0, 200) : [];
     state.ai.apiKeyConfigured = d.apiKeyConfigured !== false;
     if((!state.ai.model || !state.ai.models.includes(state.ai.model)) && state.ai.models.length){
@@ -2226,6 +2228,8 @@ window.saveState = saveState;
 window.loadState = loadState;
 window.applyLang = applyLang;
 window.refreshAiModels = refreshAiModels;
+window.saveAiSettings = saveAiSettings;
+window.loadAiSettings = loadAiSettings;
 
 buildLangSelect();
 bindAiSettings();

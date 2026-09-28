@@ -184,12 +184,17 @@ check("saveState persists oathSworn", saved.oathSworn === true);
 check("saveState persists ledger", saved.ledger.Alex.length === 1);
 check("saveState persists prefs", saved.prefs.Alex.turnons === "feathers");
 check("saveState persists mode", saved.mode === "solo");
-check("saveState persists ai settings", saved.ai.model === "olafangensan-glm-4.7-flash-heretic");
+check("saveState keeps ai settings out of game blob", !("ai" in saved));
 const loaded = sandbox.window.loadState();
 check("loadState restores", loaded === true);
 check("loadState restores heat", S.heat === 6);
 check("loadState restores prefs", S.prefs.Alex.turnons === "feathers");
-check("loadState restores ai settings", S.ai.providerUrl.includes("venice.ai"));
+check("loadState leaves ai settings untouched", S.ai.providerUrl.includes("venice.ai"));
+S.ai = { providerUrl: "https://example.com/v1/chat/completions", model: "fresh-model", models: ["fresh-model"], apiKeyConfigured: false };
+sandbox.window.saveAiSettings();
+S.ai = { providerUrl: "", model: "", models: [], apiKeyConfigured: false };
+check("saveAiSettings uses dedicated key", JSON.parse(localStorageStub.getItem("dirtytruth_ai_v1")).model === "fresh-model");
+check("loadAiSettings restores dedicated ai key", sandbox.window.loadAiSettings() === true && S.ai.model === "fresh-model");
 
 /* ---- 8. esc ---- */
 check("esc escapes html", sandbox.window.esc('<b>"x"</b>') === "&lt;b&gt;&quot;x&quot;&lt;/b&gt;");

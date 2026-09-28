@@ -4,6 +4,7 @@ import json
 import ipaddress
 import os
 import re
+import socket
 from urllib.parse import urlparse, urlunparse
 import threading
 import time
@@ -72,6 +73,25 @@ BLOCKED_LLM_HOSTS = {"localhost", "0.0.0.0"}
 BLOCKED_LLM_SUFFIXES = (".local", ".internal", ".lan", ".home", ".arpa")
 
 
+def _assert_public_host(host, port):
+    """Reject loopback/private/reserved IPs even after DNS resolution."""
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except socket.gaierror as e:
+        raise ValueError("AI provider host could not be resolved") from e
+    if not infos:
+        raise ValueError("AI provider host could not be resolved")
+    for info in infos:
+        addr = info[4][0]
+        try:
+            ip = ipaddress.ip_address(addr)
+        except ValueError:
+            continue
+        if (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast
+                or ip.is_reserved or ip.is_unspecified):
+            raise ValueError("AI provider host is not allowed")
+
+
 def _clean_model_name(value):
     """Short, header-safe model id used with OpenAI-compatible providers."""
     cleaned = re.sub(r"[^\w./:-]+", "", str(value or "").strip())
@@ -99,6 +119,7 @@ def _normalize_llm_url(value):
     except ValueError as e:
         if host == raw or "AI provider host is not allowed" in str(e):
             raise
+    _assert_public_host(host, parsed.port or 443)
     path = (parsed.path or "").rstrip("/")
     if not path:
         path = "/v1/chat/completions"
@@ -514,8 +535,8 @@ def ai_config():
 def ai_models():
     try:
         url = _normalize_llm_url(request.args.get("url") or LLM_URL)
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
+    except ValueError:
+        return jsonify({"error": "invalid provider url"}), 400
     if not LLM_KEY:
         return jsonify({"error": "LLM_KEY is not configured on the server"}), 503
     headers = {"Authorization": "Bearer " + LLM_KEY, "Content-Type": "application/json"}
@@ -530,8 +551,8 @@ def ai_models():
             for item in data if isinstance(item, dict) and _clean_model_name(item.get("id"))
         })
         return jsonify({"models": models, "selected": LLM_MODEL, "apiKeyConfigured": True})
-    except Exception as e:
-        return jsonify({"error": str(e)[:200], "apiKeyConfigured": True}), 502
+    except Exception:
+        return jsonify({"error": "could not load provider models", "apiKeyConfigured": True}), 502
 
 
 @app.route("/api/tts", methods=["POST"])

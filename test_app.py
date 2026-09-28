@@ -40,6 +40,7 @@ def test_ai_models(client, monkeypatch):
         def json(self):
             return {"data": [{"id": "z-model"}, {"id": "a-model"}]}
     monkeypatch.setattr(appmod, "LLM_KEY", "secret")
+    monkeypatch.setattr(appmod.socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("8.8.8.8", 443))])
     monkeypatch.setattr(appmod.requests, "get", lambda *a, **k: FakeResp())
     r = client.get("/api/ai/models?url=https://api.venice.ai/api/v1/chat/completions")
     assert r.status_code == 200
@@ -131,6 +132,7 @@ def test_generate_dare_llm(client, monkeypatch):
             ],
         })
     monkeypatch.setattr(appmod, "call_llm", fake_llm)
+    monkeypatch.setattr(appmod.socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("8.8.8.8", 443))])
     r = client.post("/api/generate", json={
         "players": [{"name": "Alex", "gender": "male"}, {"name": "Sam", "gender": "female"}],
         "chosen": "dare", "target": "Alex", "heat": 4, "recent": [], "round": 2,
