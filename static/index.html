@@ -1171,13 +1171,11 @@ async function speak(text){
       if(lastAudioUrl === url) lastAudioUrl = null;
       if(audioEl){
         audioEl.removeEventListener("ended", releaseAudioUrl);
-        audioEl.removeEventListener("pause", releaseAudioUrl);
         audioEl.removeEventListener("error", releaseAudioUrl);
       }
     };
-    // release the blob once playback ends/stops/errors — long sessions would otherwise leak
+    // release the blob once playback ends/errors — long sessions would otherwise leak
     audioEl.addEventListener("ended", releaseAudioUrl);
-    audioEl.addEventListener("pause", releaseAudioUrl);
     audioEl.addEventListener("error", releaseAudioUrl);
     try{
       await audioEl.play();
