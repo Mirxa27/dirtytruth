@@ -612,6 +612,24 @@ def test_tts_falls_back_to_edge_when_kokoro_fails(client, monkeypatch):
     assert captured["text"] == "Hola"
     assert captured["voice"] == edge_tts_voice("es")
 
+
+def test_tts_fallback_reuses_explicit_edge_voice(client, monkeypatch):
+    def fake_post(url, headers=None, json=None, timeout=None):
+        raise RuntimeError("kokoro down")
+    captured = {}
+    def fake_edge(text, voice=None):
+        captured["voice"] = voice
+        return b"EDGE_MP3"
+    monkeypatch.setattr(appmod.requests, "post", fake_post)
+    monkeypatch.setattr(appmod, "tts_via_edge", fake_edge)
+    r = client.post("/api/tts", json={
+        "text": "Hello",
+        "lang": "en",
+        "voice": "en-US-AvaNeural",
+    })
+    assert r.status_code == 200
+    assert captured["voice"] == "en-US-AvaNeural"
+
 def test_tts_truncates_long_text(client, monkeypatch):
     captured = {}
     class FakeResp:

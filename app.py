@@ -651,23 +651,23 @@ def tts():
     if not text.strip():
         return jsonify({"error": "empty text"}), 400
     lang = get_lang(data.get("lang", "en"))
-    voice = str(data.get("voice", ""))[:20] or tts_voice(lang["code"])
-    edge_voice = edge_tts_voice(lang["code"])
+    raw_voice = str(data.get("voice", "")).strip()
+    voice = raw_voice[:20] or tts_voice(lang["code"])
+    edge_voice = raw_voice[:80] if raw_voice.endswith("Neural") else edge_tts_voice(lang["code"])
     # Arabic has no Kokoro voice — go straight to Edge neural speech
     if lang["code"] == "ar":
         audio = tts_via_edge(text, voice=edge_voice)
         if audio:
             return audio, 200, {"Content-Type": "audio/mpeg", "Cache-Control": "no-store"}
-    kokoro_error = None
     try:
         audio = tts_via_kokoro(text, voice)
         return audio, 200, {"Content-Type": "audio/mpeg", "Cache-Control": "no-store"}
-    except Exception as e:
-        kokoro_error = e
+    except Exception:
+        pass
     audio = tts_via_edge(text, voice=edge_voice)
     if audio:
         return audio, 200, {"Content-Type": "audio/mpeg", "Cache-Control": "no-store"}
-    return jsonify({"error": str(kokoro_error)[:200]}), 502
+    return jsonify({"error": "tts unavailable"}), 502
 
 
 @app.route("/api/languages")
