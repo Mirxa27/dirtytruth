@@ -1271,6 +1271,10 @@ function renderAiSettings(){
   const url = $("#aiProviderUrl"); if(url && url.value !== state.ai.providerUrl) url.value = state.ai.providerUrl || "";
   renderAiModelOptions();
 }
+function aiProviderOrigin(url){
+  const m = String(url || "").trim().match(/^https:\/\/[^/?#]+/i);
+  return m ? m[0].toLowerCase() : "";
+}
 function currentAiPayload(){
   return { url: state.ai.providerUrl, model: state.ai.model };
 }
@@ -1309,7 +1313,11 @@ async function bootstrapAiSettings(){
   renderAiSettings();
   try{
     const cfg = await api("/api/ai/config", null, "GET", 15000);
-    const providerChanged = !!(cfg.provider_url && state.ai.providerUrl && state.ai.providerUrl !== cfg.provider_url);
+    const providerChanged = !!(
+      aiProviderOrigin(cfg.provider_url) &&
+      aiProviderOrigin(state.ai.providerUrl) &&
+      aiProviderOrigin(state.ai.providerUrl) !== aiProviderOrigin(cfg.provider_url)
+    );
     state.ai.providerUrl = cfg.provider_url || state.ai.providerUrl || "";
     if(providerChanged){
       state.ai.model = cfg.model || "";
