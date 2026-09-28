@@ -198,6 +198,11 @@
   textarea:focus{border-color:var(--purple)}
   .linkrow{display:flex;gap:8px;margin-top:12px}
   .linkrow input{flex:1;font-size:.85rem;opacity:.92;padding:10px 12px}
+  .stack{display:flex;gap:8px;align-items:center}
+  .muted-note{font-size:.75rem;color:var(--dim);line-height:1.45}
+  .statusline{font-size:.78rem;color:var(--dim);margin-top:8px;line-height:1.4}
+  .statusline.ok{color:#8ff1b8}
+  .statusline.warn{color:#fbbf24}
 
   /* entrance animation */
   .card.enter{animation:enter .4s ease}
@@ -235,7 +240,26 @@
     <div class="row" style="align-items:center">
       <span style="font-size:1.1rem">🌍</span>
       <select id="langSelect" style="flex:1"></select>
+      <button class="btn btn-ghost" id="aiSettingsToggle" style="width:auto;padding:0 14px;font-size:1rem" title="AI settings" aria-label="AI settings">⚙️</button>
     </div>
+  </div>
+
+  <div class="card hidden" id="aiCard" style="padding:14px">
+    <div style="font-weight:800;font-size:.98rem" data-i18n="aiSettingsTitle">AI settings</div>
+    <div class="muted-note" data-i18n="aiSettingsSub" style="margin:6px 0 12px">Venice is the default. Add your own provider URL + API key here if you want to fetch and use a different model.</div>
+    <label data-i18n="aiProviderLabel">Provider URL</label>
+    <input type="url" id="aiProviderUrl" placeholder="https://api.venice.ai/api/v1/chat/completions">
+    <label data-i18n="aiApiKeyLabel" style="margin-top:10px">API key (optional)</label>
+    <input type="password" id="aiApiKey" autocomplete="off" placeholder="Bring your own provider key" data-i18n-ph="aiApiKeyPlaceholder">
+    <div class="row" style="margin-top:10px;align-items:end">
+      <div style="flex:1">
+        <label data-i18n="aiModelLabel">Model</label>
+        <select id="aiModelSelect"></select>
+      </div>
+      <button class="btn btn-ghost" id="aiRefreshModelsBtn" style="width:auto;padding:0 16px;font-size:.85rem" data-i18n="aiFetchModels">↻ Fetch models</button>
+    </div>
+    <div class="statusline" id="aiSettingsStatus" data-i18n="aiStatusReady">Using Venice by default. Open settings only if you want your own provider details.</div>
+    <div class="muted-note" data-i18n="aiSettingsNote" style="margin-top:8px">Leave the API key blank to use the default Venice setup. Custom API keys stay only in this tab; saved URL/model settings stay on this device.</div>
   </div>
 
   <!-- SETUP -->
@@ -433,6 +457,14 @@ const I18N = {
   en: {
     rtl: false,
     appTitle:"🐴 Dirty Truth & Dare 🔥", tagline:"A slow-burn game of secrets, dares & desire",
+    aiSettingsTitle:"AI settings", aiSettingsSub:"Venice is the default. Add your own provider URL + API key here if you want to fetch and use a different model.",
+    aiApiKeyLabel:"API key (optional)", aiApiKeyPlaceholder:"Bring your own provider key",
+    aiProviderLabel:"Provider URL", aiModelLabel:"Model", aiFetchModels:"↻ Fetch models",
+    aiSettingsNote:"Leave the API key blank to use the default Venice setup. Custom API keys stay only in this tab; saved URL/model settings stay on this device.",
+    aiStatusReady:"Using Venice by default. Open settings only if you want your own provider details.", aiStatusLoading:"Loading available models…",
+    aiStatusLoaded:"Loaded {n} models.", aiStatusSaved:"AI settings saved.", aiStatusMissingKey:"Add LLM_KEY in Vercel or enter your own API key before fetching provider models.",
+    aiStatusLoadFail:"Could not load models with those AI settings.", aiStatusInvalidUrl:"Enter a public HTTPS OpenAI-compatible URL.",
+    aiStatusCustomKey:"Enter your own API key to use a custom provider URL.",
     player1:"Player 1", player2:"Player 2", gender:"Gender", male:"Male", female:"Female", partner:"Partner",
     playMode:"Play mode", solo:"📱 Solo", twoDevices:"📲 Two devices",
     hostHint:"You'll create a room and share the code with your partner.",
@@ -930,6 +962,7 @@ const state = {
   roomVersion: 0,
   roomPoll: null,
   guestJoined: false,
+  ai: { providerUrl: "", model: "", models: [], apiKeyConfigured: false, apiKey: "", defaultProviderUrl: "", defaultModel: "" },
 };
 const TRUTH_LIMIT = 3;
 const PENALTY = 100;
@@ -1174,6 +1207,7 @@ function updateHeatLabel(){
    Persistence
    ========================================================================= */
 const SAVE_KEY = "dirtytruth_save_v1";
+const AI_SAVE_KEY = "dirtytruth_ai_v1";
 function saveState(){
   try{
     localStorage.setItem(SAVE_KEY, JSON.stringify({
@@ -1202,6 +1236,154 @@ function loadState(){
     state.answers = (s.answers && typeof s.answers === "object") ? s.answers : {};
     return true;
   }catch(e){ return false; }
+}
+
+function saveAiSettings(){
+  try{
+    localStorage.setItem(AI_SAVE_KEY, JSON.stringify({
+      providerUrl: state.ai.providerUrl,
+      model: state.ai.model,
+    }));
+  }catch(e){}
+}
+function loadAiSettings(){
+  try{
+    const raw = localStorage.getItem(AI_SAVE_KEY); if(!raw) return false;
+    const s = JSON.parse(raw) || {};
+    state.ai = Object.assign(state.ai, {
+      providerUrl: s.providerUrl || state.ai.providerUrl,
+      model: s.model || state.ai.model,
+      models: [],
+      apiKey: "",
+    });
+    return true;
+  }catch(e){ return false; }
+}
+function renderAiStatus(message, tone){
+  const el = $("#aiSettingsStatus"); if(!el) return;
+  el.textContent = message || "";
+  el.className = "statusline" + (tone ? " " + tone : "");
+}
+function renderAiModelOptions(){
+  const sel = $("#aiModelSelect"); if(!sel) return;
+  const models = Array.from(new Set((state.ai.models || []).filter(Boolean)));
+  const current = (state.ai.model || "").trim();
+  if(current && !models.includes(current)) models.unshift(current);
+  if(!models.length) models.push(current || "");
+  sel.innerHTML = models.map(m => `<option value="${esc(m)}">${esc(m || "—")}</option>`).join("");
+  sel.value = current || models[0] || "";
+}
+function renderAiSettings(){
+  const url = $("#aiProviderUrl"); if(url && url.value !== state.ai.providerUrl) url.value = state.ai.providerUrl || "";
+  const key = $("#aiApiKey"); if(key && key.value !== (state.ai.apiKey || "")) key.value = state.ai.apiKey || "";
+  renderAiModelOptions();
+}
+function normalizeAiProviderUrl(url){
+  const raw = String(url || "").trim();
+  const m = raw.match(/^(https:\/\/[^/:?#]+(?::\d+)?)(\/[^?#]*)?/i);
+  if(!m) return "";
+  let path = (m[2] || "").replace(/\/+$/, "");
+  if(!path) path = "/v1/chat/completions";
+  else if(!/\/chat\/completions$/i.test(path)) path += /\/v1$/i.test(path) ? "/chat/completions" : "/v1/chat/completions";
+  return m[1].toLowerCase() + path;
+}
+function defaultAiProviderUrl(){
+  return normalizeAiProviderUrl(state.ai.defaultProviderUrl || state.ai.providerUrl || "");
+}
+function currentAiPayload(){
+  const apiKey = (state.ai.apiKey || "").trim();
+  const custom = isCustomAiProvider(state.ai.providerUrl);
+  const out = {
+    url: custom && !apiKey ? (state.ai.defaultProviderUrl || state.ai.providerUrl) : state.ai.providerUrl,
+    model: custom && !apiKey ? (state.ai.defaultModel || state.ai.model) : state.ai.model,
+  };
+  if(apiKey) out.apiKey = apiKey;
+  return out;
+}
+function isCustomAiProvider(url){
+  const normalized = normalizeAiProviderUrl(url);
+  return !!(normalized && defaultAiProviderUrl() && normalized !== defaultAiProviderUrl());
+}
+function setAiSettingsOpen(open){
+  $("#aiCard").classList.toggle("hidden", !open);
+  const btn = $("#aiSettingsToggle");
+  if(btn) btn.setAttribute("aria-expanded", open ? "true" : "false");
+}
+async function refreshAiModels(opts){
+  opts = opts || {};
+  const field = $("#aiProviderUrl");
+  const keyField = $("#aiApiKey");
+  const url = ((field && field.value) || state.ai.providerUrl || "").trim();
+  if(!/^https:\/\//i.test(url)){
+    renderAiStatus(t("aiStatusInvalidUrl"), "warn");
+    return;
+  }
+  const apiKey = ((keyField && keyField.value) || state.ai.apiKey || "").trim();
+  if(isCustomAiProvider(url) && !apiKey){
+    renderAiStatus(t("aiStatusCustomKey"), "warn");
+    return;
+  }
+  state.ai.providerUrl = url;
+  state.ai.apiKey = apiKey;
+  saveAiSettings();
+  renderAiStatus(t("aiStatusLoading"));
+  try{
+    const r = await fetch("/api/ai/models", {
+      method:"POST",
+      headers:{"Accept":"application/json","Content-Type":"application/json"},
+      body: JSON.stringify({url, apiKey}),
+    });
+    const d = await r.json().catch(() => ({}));
+    if(!r.ok){
+      state.ai.apiKeyConfigured = d.apiKeyConfigured !== false && r.status !== 503;
+      throw new Error(d.error || ("http " + r.status));
+    }
+    state.ai.models = Array.isArray(d.models) ? d.models.slice(0, 200) : [];
+    state.ai.apiKeyConfigured = d.apiKeyConfigured !== false;
+    if((!state.ai.model || !state.ai.models.includes(state.ai.model)) && state.ai.models.length){
+      state.ai.model = state.ai.models[0];
+    }
+    renderAiSettings();
+    saveAiSettings();
+    renderAiStatus(t("aiStatusLoaded", {n: state.ai.models.length || 0}), "ok");
+  }catch(e){
+    renderAiStatus(state.ai.apiKeyConfigured ? t("aiStatusLoadFail") : t("aiStatusMissingKey"), "warn");
+  }
+}
+async function bootstrapAiSettings(){
+  loadAiSettings();
+  renderAiSettings();
+  try{
+    const cfg = await api("/api/ai/config", null, "GET", 15000);
+    state.ai.defaultProviderUrl = cfg.provider_url || "";
+    state.ai.defaultModel = cfg.model || "";
+    state.ai.providerUrl = state.ai.providerUrl || cfg.provider_url || "";
+    state.ai.model = state.ai.model || cfg.model || "";
+    state.ai.apiKeyConfigured = !!cfg.apiKeyConfigured;
+    renderAiSettings();
+    saveAiSettings();
+    renderAiStatus(cfg.apiKeyConfigured ? t("aiStatusReady") : t("aiStatusMissingKey"), cfg.apiKeyConfigured ? "" : "warn");
+  }catch(e){
+    renderAiStatus(t("aiStatusLoadFail"), "warn");
+  }
+}
+function bindAiSettings(){
+  $("#aiSettingsToggle").addEventListener("click", () => { setAiSettingsOpen($("#aiCard").classList.contains("hidden")); });
+  $("#aiRefreshModelsBtn").addEventListener("click", () => { refreshAiModels().catch(()=>{}); });
+  $("#aiProviderUrl").addEventListener("change", () => {
+    state.ai.providerUrl = $("#aiProviderUrl").value.trim();
+    saveAiSettings();
+    refreshAiModels().catch(()=>{});
+  });
+  $("#aiApiKey").addEventListener("change", () => {
+    state.ai.apiKey = $("#aiApiKey").value.trim();
+    renderAiStatus(t("aiStatusSaved"));
+  });
+  $("#aiModelSelect").addEventListener("change", () => {
+    state.ai.model = $("#aiModelSelect").value.trim();
+    saveAiSettings();
+    renderAiStatus(t("aiStatusSaved"));
+  });
 }
 
 /* =========================================================================
@@ -1697,6 +1879,7 @@ async function generateChallenge(chosen){
   };
   let d;
   try{
+    body.ai = currentAiPayload();
     d = await api("/api/generate", body);
   }catch(e){
     d = {type: chosen, title: "…", steps: [{instruction: t("netFail"), seconds: 10}], engine: "error"};
@@ -2000,7 +2183,7 @@ async function sendChat(){
   typing.className = "msg cassia typing"; typing.textContent = "…";
   $("#chatLog").appendChild(typing);
   try{
-    const d = await api("/api/chat", {message: msg, players: state.players, target: state.target?state.target.name:null, heat: state.heat, recent: state.recent, lang: uiLang}, "POST", 30000);
+    const d = await api("/api/chat", {message: msg, players: state.players, target: state.target?state.target.name:null, heat: state.heat, recent: state.recent, lang: uiLang, ai: currentAiPayload()}, "POST", 30000);
     typing.remove();
     addChat("cassia", d.reply);
     if(d.heat){
@@ -2093,9 +2276,18 @@ window.showOath = showOath;
 window.saveState = saveState;
 window.loadState = loadState;
 window.applyLang = applyLang;
+window.refreshAiModels = refreshAiModels;
+window.saveAiSettings = saveAiSettings;
+window.loadAiSettings = loadAiSettings;
+window.normalizeAiProviderUrl = normalizeAiProviderUrl;
+window.currentAiPayload = currentAiPayload;
+window.setAiSettingsOpen = setAiSettingsOpen;
 
 buildLangSelect();
+bindAiSettings();
+setAiSettingsOpen(false);
 applyLang();
+bootstrapAiSettings().catch(()=>{});
 async function enterGameUI(resumeRoomText){
   $("#setupCard").classList.add("hidden");
   $("#gameUI").classList.remove("hidden");

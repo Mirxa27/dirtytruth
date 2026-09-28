@@ -26,6 +26,51 @@ def test_health(client):
     assert d["ok"] is True
     assert d["engine"] == "Cassia AI"
 
+def test_ai_config(client):
+    r = client.get("/api/ai/config")
+    assert r.status_code == 200
+    d = r.get_json()
+    assert d["provider_type"] == "openai-compatible"
+    assert d["provider_url"].startswith("https://")
+    assert d["model"]
+
+def test_ai_models(client, monkeypatch):
+    monkeypatch.setattr(appmod, "LLM_KEY", "secret")
+    monkeypatch.setattr(appmod.socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("8.8.8.8", 443))])
+    monkeypatch.setattr(appmod, "_pinned_json_request",
+                        lambda *a, **k: {"data": [{"id": "z-model"}, {"id": "a-model"}]})
+    r = client.get("/api/ai/models?url=https://api.venice.ai/api/v1/chat/completions")
+    assert r.status_code == 200
+    d = r.get_json()
+    assert d["models"] == ["a-model", "z-model"]
+    assert d["apiKeyConfigured"] is True
+
+def test_ai_models_rejects_untrusted_provider_url(client, monkeypatch):
+    monkeypatch.setattr(appmod, "LLM_KEY", "secret")
+    monkeypatch.setattr(appmod.socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("8.8.8.8", 443))])
+    r = client.get("/api/ai/models?url=https://evil.example/v1/chat/completions")
+    assert r.status_code == 400
+    assert r.get_json()["error"] == "invalid provider url"
+
+def test_ai_models_allows_custom_provider_with_user_key(client, monkeypatch):
+    captured = {}
+    monkeypatch.setattr(appmod.socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("8.8.8.8", 443))])
+    def fake_request(method, url, headers=None, json_body=None, timeout=None):
+        captured.update(method=method, url=url, headers=headers)
+        return {"data": [{"id": "x-model"}]}
+    monkeypatch.setattr(appmod, "_pinned_json_request", fake_request)
+    r = client.post("/api/ai/models", json={
+        "url": "https://custom.example/v1/chat/completions",
+        "apiKey": "user-secret",
+        "model": "picked-model",
+    })
+    assert r.status_code == 200
+    d = r.get_json()
+    assert d["models"] == ["x-model"]
+    assert d["selected"] == "picked-model"
+    assert captured["url"] == "https://custom.example/v1/models"
+    assert captured["headers"]["Authorization"].startswith("Bearer ")
+
 def test_index_serves_html(client):
     r = client.get("/")
     assert r.status_code == 200
@@ -99,7 +144,9 @@ def test_500_handler_returns_json():
 # /api/generate — LLM mocked
 # ---------------------------------------------------------------------------
 def test_generate_dare_llm(client, monkeypatch):
-    def fake_llm(payload, retries=3):
+    captured = {}
+    def fake_llm(payload, ai_settings=None, retries=3):
+        captured["ai"] = ai_settings
         return json.dumps({
             "text": "Slow Embrace",
             "steps": [
@@ -108,9 +155,11 @@ def test_generate_dare_llm(client, monkeypatch):
             ],
         })
     monkeypatch.setattr(appmod, "call_llm", fake_llm)
+    monkeypatch.setattr(appmod.socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("8.8.8.8", 443))])
     r = client.post("/api/generate", json={
         "players": [{"name": "Alex", "gender": "male"}, {"name": "Sam", "gender": "female"}],
         "chosen": "dare", "target": "Alex", "heat": 4, "recent": [], "round": 2,
+        "ai": {"url": "https://api.venice.ai/api/v1/chat/completions", "model": "custom-model"},
     })
     assert r.status_code == 200
     d = r.get_json()
@@ -119,9 +168,26 @@ def test_generate_dare_llm(client, monkeypatch):
     assert d["title"] == "Slow Embrace"
     assert len(d["steps"]) == 2
     assert all(s["seconds"] for s in d["steps"])
+    assert captured["ai"]["model"] == "custom-model"
+
+def test_generate_uses_custom_provider_key(client, monkeypatch):
+    captured = {}
+    def fake_llm(payload, ai_settings=None, retries=3):
+        captured["ai"] = ai_settings
+        return json.dumps({"text": "Slow Embrace", "steps": [{"instruction": "Do this", "seconds": 30}, {"instruction": "Do that", "seconds": 20}]})
+    monkeypatch.setattr(appmod, "call_llm", fake_llm)
+    monkeypatch.setattr(appmod.socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("8.8.8.8", 443))])
+    r = client.post("/api/generate", json={
+        "chosen": "dare", "target": "Alex", "heat": 4,
+        "players": [{"name": "Alex"}, {"name": "Sam"}],
+        "ai": {"url": "https://custom.example/v1/chat/completions", "model": "custom-model", "apiKey": "user-secret"},
+    })
+    assert r.status_code == 200
+    assert captured["ai"]["url"] == "https://custom.example/v1/chat/completions"
+    assert captured["ai"]["api_key"] == "user-secret"
 
 def test_generate_truth_llm_collapses_to_question(client, monkeypatch):
-    def fake_llm(payload, retries=3):
+    def fake_llm(payload, ai_settings=None, retries=3):
         return json.dumps({
             "text": "A secret desire",
             "steps": [{"instruction": "Alex, tell Sam the exact spot on his body you most want to kiss and why.", "seconds": 45}],
@@ -142,7 +208,7 @@ def test_generate_truth_llm_collapses_to_question(client, monkeypatch):
     assert len(d["steps"][0]["instruction"]) > 15
 
 def test_generate_truth_llm_without_question_mark_stripped(client, monkeypatch):
-    def fake_llm(payload, retries=3):
+    def fake_llm(payload, ai_settings=None, retries=3):
         return json.dumps({
             "text": "Tell me",
             "steps": [{"instruction": "Alex, describe your favorite memory of us", "seconds": 45}],
@@ -158,7 +224,7 @@ def test_generate_truth_llm_without_question_mark_stripped(client, monkeypatch):
     assert "Answer out loud" not in d["steps"][0]["instruction"]
 
 def test_generate_truth_strips_llm_added_prefix(client, monkeypatch):
-    def fake_llm(payload, retries=3):
+    def fake_llm(payload, ai_settings=None, retries=3):
         return json.dumps({
             "text": "T",
             "steps": [{"instruction": "Answer out loud: Alex, describe your favorite memory of us", "seconds": 45}],
@@ -174,7 +240,7 @@ def test_generate_truth_strips_llm_added_prefix(client, monkeypatch):
     assert d["steps"][0]["instruction"].startswith("Alex, describe")
 
 def test_generate_fallback_on_llm_failure(client, monkeypatch):
-    def boom(payload, retries=3):
+    def boom(payload, ai_settings=None, retries=3):
         raise RuntimeError("LLM down")
     monkeypatch.setattr(appmod, "call_llm", boom)
     r = client.post("/api/generate", json={
@@ -188,7 +254,7 @@ def test_generate_fallback_on_llm_failure(client, monkeypatch):
     assert d["title"]
 
 def test_generate_fallback_truth_is_question(client, monkeypatch):
-    def boom(payload, retries=3):
+    def boom(payload, ai_settings=None, retries=3):
         raise RuntimeError("LLM down")
     monkeypatch.setattr(appmod, "call_llm", boom)
     r = client.post("/api/generate", json={
@@ -201,7 +267,7 @@ def test_generate_fallback_truth_is_question(client, monkeypatch):
     assert len(d["steps"][0]["instruction"]) > 15
 
 def test_generate_bad_input_defaults(client, monkeypatch):
-    def boom(payload, retries=3):
+    def boom(payload, ai_settings=None, retries=3):
         raise RuntimeError("LLM down")
     monkeypatch.setattr(appmod, "call_llm", boom)
     r = client.post("/api/generate", json={})
@@ -211,7 +277,7 @@ def test_generate_bad_input_defaults(client, monkeypatch):
     assert d["steps"]
 
 def test_generate_ignores_unknown_chosen(client, monkeypatch):
-    def boom(payload, retries=3):
+    def boom(payload, ai_settings=None, retries=3):
         raise RuntimeError("LLM down")
     monkeypatch.setattr(appmod, "call_llm", boom)
     r = client.post("/api/generate", json={"chosen": "banana", "target": "Alex", "heat": 3})
@@ -219,7 +285,7 @@ def test_generate_ignores_unknown_chosen(client, monkeypatch):
     assert d["type"] == "truth"  # unknown -> defaults to truth
 
 def test_generate_malformed_heat_and_round(client, monkeypatch):
-    def boom(payload, retries=3):
+    def boom(payload, ai_settings=None, retries=3):
         raise RuntimeError("LLM down")
     monkeypatch.setattr(appmod, "call_llm", boom)
     r = client.post("/api/generate", json={"heat": "abc", "round": None, "target": "Alex"})
@@ -227,7 +293,7 @@ def test_generate_malformed_heat_and_round(client, monkeypatch):
     assert r.get_json()["steps"]
 
 def test_generate_malformed_players(client, monkeypatch):
-    def boom(payload, retries=3):
+    def boom(payload, ai_settings=None, retries=3):
         raise RuntimeError("LLM down")
     monkeypatch.setattr(appmod, "call_llm", boom)
     r = client.post("/api/generate", json={
@@ -238,7 +304,7 @@ def test_generate_malformed_players(client, monkeypatch):
     assert r.get_json()["steps"]
 
 def test_generate_non_dict_json_body(client, monkeypatch):
-    def boom(payload, retries=3):
+    def boom(payload, ai_settings=None, retries=3):
         raise RuntimeError("LLM down")
     monkeypatch.setattr(appmod, "call_llm", boom)
     r = client.post("/api/generate", data='"just a string"', content_type="application/json")
@@ -246,7 +312,7 @@ def test_generate_non_dict_json_body(client, monkeypatch):
     assert r.get_json()["steps"]
 
 def test_chat_malformed_heat(client, monkeypatch):
-    def fake_llm(payload, retries=3):
+    def fake_llm(payload, ai_settings=None, retries=3):
         return json.dumps({"reply": "ok"})
     monkeypatch.setattr(appmod, "call_llm", fake_llm)
     r = client.post("/api/chat", json={"message": "hi", "heat": "zzz", "target": 42})
@@ -311,7 +377,7 @@ def test_penalty_endpoint_empty_player(client):
     assert r.get_json()["player"] == "Player"
 
 def test_generate_returns_phase(client, monkeypatch):
-    def fake_llm(payload, retries=3):
+    def fake_llm(payload, ai_settings=None, retries=3):
         return json.dumps({"text": "T", "steps": [{"instruction": "Do it", "seconds": 30}]})
     monkeypatch.setattr(appmod, "call_llm", fake_llm)
     r = client.post("/api/generate", json={"chosen": "dare", "target": "Alex", "heat": 3, "round": 1})
@@ -335,7 +401,7 @@ def test_languages_endpoint(client):
 
 def test_generate_with_language(client, monkeypatch):
     captured = {}
-    def fake_llm(payload, retries=3):
+    def fake_llm(payload, ai_settings=None, retries=3):
         captured["sys"] = payload["messages"][0]["content"]
         return json.dumps({"text": "T", "steps": [{"instruction": "Do it", "seconds": 30}]})
     monkeypatch.setattr(appmod, "call_llm", fake_llm)
@@ -413,7 +479,7 @@ def test_room_prefs(client):
 
 def test_generate_with_prefs(client, monkeypatch):
     captured = {}
-    def fake_llm(payload, retries=3):
+    def fake_llm(payload, ai_settings=None, retries=3):
         captured["user"] = payload["messages"][1]["content"]
         return json.dumps({"text": "T", "steps": [{"instruction": "Do it", "seconds": 30}]})
     monkeypatch.setattr(appmod, "call_llm", fake_llm)
@@ -459,7 +525,7 @@ def test_streak_bad_input(client):
 # /api/chat — LLM mocked
 # ---------------------------------------------------------------------------
 def test_chat_reply(client, monkeypatch):
-    def fake_llm(payload, retries=3):
+    def fake_llm(payload, ai_settings=None, retries=3):
         return json.dumps({"reply": "Mmm, take your time with me.", "heat": None})
     monkeypatch.setattr(appmod, "call_llm", fake_llm)
     r = client.post("/api/chat", json={
@@ -472,7 +538,7 @@ def test_chat_reply(client, monkeypatch):
     assert "heat" not in d
 
 def test_chat_heat_change(client, monkeypatch):
-    def fake_llm(payload, retries=3):
+    def fake_llm(payload, ai_settings=None, retries=3):
         return json.dumps({"reply": "Turning it up.", "heat": 8})
     monkeypatch.setattr(appmod, "call_llm", fake_llm)
     r = client.post("/api/chat", json={"message": "go harder", "heat": 5})
@@ -480,7 +546,7 @@ def test_chat_heat_change(client, monkeypatch):
     assert d["heat"] == 8
 
 def test_chat_question(client, monkeypatch):
-    def fake_llm(payload, retries=3):
+    def fake_llm(payload, ai_settings=None, retries=3):
         return json.dumps({"reply": "Here you go.", "heat": 6, "question": "Blindfolded Kiss", "type": "dare"})
     monkeypatch.setattr(appmod, "call_llm", fake_llm)
     r = client.post("/api/chat", json={"message": "give me a dare", "heat": 5})
@@ -489,7 +555,7 @@ def test_chat_question(client, monkeypatch):
     assert d["type"] == "dare"
 
 def test_chat_fallback_plain(client, monkeypatch):
-    def boom(payload, retries=3):
+    def boom(payload, ai_settings=None, retries=3):
         raise RuntimeError("LLM down")
     monkeypatch.setattr(appmod, "call_llm", boom)
     r = client.post("/api/chat", json={"message": "hello"})
@@ -544,30 +610,105 @@ def test_tts_truncates_long_text(client, monkeypatch):
 # ---------------------------------------------------------------------------
 def test_call_llm_retries_on_empty(monkeypatch):
     calls = {"n": 0}
-    class FakeResp:
-        status_code = 200
-        def raise_for_status(self): pass
-        def json(self):
-            return {"choices": [{"message": {"content": "" if calls["n"] < 2 else "ok"}, "finish_reason": "stop"}]}
-    def fake_post(url, headers=None, json=None, timeout=None):
+    def fake_request(method, url, headers=None, json_body=None, timeout=None):
         calls["n"] += 1
-        return FakeResp()
-    monkeypatch.setattr(appmod.requests, "post", fake_post)
+        return {"choices": [{"message": {"content": "" if calls["n"] < 2 else "ok"}, "finish_reason": "stop"}]}
+    monkeypatch.setattr(appmod, "_pinned_json_request", fake_request)
     monkeypatch.setattr(appmod.time, "sleep", lambda s: None)
     out = appmod.call_llm({"model": "x", "messages": []})
     assert out == "ok"
     assert calls["n"] == 2  # empty, empty, then success
 
 def test_call_llm_raises_after_retries(monkeypatch):
-    def fake_post(url, headers=None, json=None, timeout=None):
+    def fake_request(method, url, headers=None, json_body=None, timeout=None):
         raise RuntimeError("down")
-    monkeypatch.setattr(appmod.requests, "post", fake_post)
+    monkeypatch.setattr(appmod, "_pinned_json_request", fake_request)
     monkeypatch.setattr(appmod.time, "sleep", lambda s: None)
     try:
         appmod.call_llm({"model": "x", "messages": []})
         assert False, "should have raised"
     except RuntimeError as e:
         assert "3 attempts" in str(e)
+
+def test_call_llm_uses_request_scoped_ai_settings(monkeypatch):
+    seen = {}
+    def fake_request(method, url, headers=None, json_body=None, timeout=None):
+        seen.update(method=method, url=url, headers=headers, json=json_body, timeout=timeout)
+        return {"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]}
+    monkeypatch.setattr(appmod, "_pinned_json_request", fake_request)
+    out = appmod.call_llm({"messages": []}, ai_settings={
+        "url": "https://api.venice.ai/api/v1/chat/completions",
+        "model": "scoped-model",
+        "api_key": "sekret",
+    })
+    assert out == "ok"
+    assert seen["url"] == "https://api.venice.ai/api/v1/chat/completions"
+    assert seen["json"]["model"] == "scoped-model"
+    assert seen["headers"]["Authorization"].startswith("Bearer ")
+
+def test_get_ai_settings_ignores_untrusted_provider_url(monkeypatch):
+    monkeypatch.setattr(appmod.socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("8.8.8.8", 443))])
+    base = "https://api.venice.ai/api/v1/chat/completions"
+    monkeypatch.setattr(appmod, "LLM_URL", base)
+    ai = appmod.get_ai_settings({"url": "https://evil.example/v1/chat/completions", "model": "custom"})
+    assert ai["url"] == base
+    assert ai["model"] == "custom"
+
+def test_get_ai_settings_ignores_same_host_different_path(monkeypatch):
+    monkeypatch.setattr(appmod.socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("8.8.8.8", 443))])
+    base = "https://api.venice.ai/api/v1/chat/completions"
+    monkeypatch.setattr(appmod, "LLM_URL", base)
+    ai = appmod.get_ai_settings({"url": "https://api.venice.ai/other/v1/chat/completions", "model": "custom"})
+    assert ai["url"] == base
+    assert ai["model"] == "custom"
+
+def test_get_ai_settings_allows_custom_provider_with_user_key(monkeypatch):
+    monkeypatch.setattr(appmod.socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("8.8.8.8", 443))])
+    ai = appmod.get_ai_settings({
+        "url": "https://custom.example/v1/chat/completions",
+        "model": "custom",
+        "apiKey": "user-secret",
+    })
+    assert ai["url"] == "https://custom.example/v1/chat/completions"
+    assert ai["model"] == "custom"
+    assert ai["api_key"] == "user-secret"
+    assert ai["custom_key"] is True
+
+def test_pinned_json_request_uses_validated_address(monkeypatch):
+    seen = {}
+
+    class FakeResp:
+        status = 200
+        data = b'{"ok": true}'
+
+    class FakePool:
+        def __init__(self, host, port=None, **kwargs):
+            seen["pool"] = {"host": host, "port": port, **kwargs}
+        def urlopen(self, method, path, body=None, headers=None, timeout=None, retries=None):
+            seen["request"] = {
+                "method": method, "path": path, "body": body,
+                "headers": headers, "timeout": timeout, "retries": retries,
+            }
+            return FakeResp()
+        def close(self):
+            seen["closed"] = True
+
+    monkeypatch.setattr(appmod.socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("8.8.8.8", 443))])
+    monkeypatch.setattr(appmod.urllib3, "HTTPSConnectionPool", FakePool)
+    out = appmod._pinned_json_request(
+        "POST",
+        "https://api.venice.ai/v1/chat/completions",
+        headers={"Authorization": "******"},
+        json_body={"hello": "world"},
+        timeout=12,
+    )
+    assert out == {"ok": True}
+    assert seen["pool"]["host"] == "8.8.8.8"
+    assert seen["pool"]["assert_hostname"] == "api.venice.ai"
+    assert seen["pool"]["server_hostname"] == "api.venice.ai"
+    assert seen["request"]["headers"]["Host"] == "api.venice.ai"
+    assert json.loads(seen["request"]["body"].decode("utf-8")) == {"hello": "world"}
+    assert seen["closed"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -616,7 +757,7 @@ def test_validate_challenge_truth_only_prefix_returns_none():
     assert appmod.validate_challenge("truth", "T", [{"instruction": "Answer out loud:", "seconds": 45}]) is None
 
 def test_generate_llm_returns_empty_steps_falls_back(client, monkeypatch):
-    def fake_llm(payload, retries=3):
+    def fake_llm(payload, ai_settings=None, retries=3):
         return json.dumps({"text": "", "steps": []})
     monkeypatch.setattr(appmod, "call_llm", fake_llm)
     r = client.post("/api/generate", json={"chosen": "dare", "target": "Alex", "heat": 4})
@@ -625,7 +766,7 @@ def test_generate_llm_returns_empty_steps_falls_back(client, monkeypatch):
     assert d["steps"]
 
 def test_chat_non_dict_json_body(client, monkeypatch):
-    def fake_llm(payload, retries=3):
+    def fake_llm(payload, ai_settings=None, retries=3):
         return json.dumps({"reply": "ok"})
     monkeypatch.setattr(appmod, "call_llm", fake_llm)
     r = client.post("/api/chat", data='"just a string"', content_type="application/json")
@@ -649,7 +790,7 @@ def test_rate_limited_endpoints_return_429(client, monkeypatch):
     monkeypatch.setattr(appmod, "RATE_LIMITS", {"/api/generate": 2})
     appmod._rl_hits.clear()
 
-    def boom(payload, retries=3):  # force the offline-fallback path (still 200)
+    def boom(payload, ai_settings=None, retries=3):  # force the offline-fallback path (still 200)
         raise RuntimeError("llm down")
     monkeypatch.setattr(appmod, "call_llm", boom)
     try:
@@ -679,6 +820,20 @@ def test_rate_limit_forwarded_for_isolated_ips(client, monkeypatch):
         assert r2.status_code == 200
         r3 = client.post("/api/chat", json={"message": "hi"})
         assert r3.status_code == 429
+    finally:
+        appmod._rl_hits.clear()
+
+def test_ai_models_rate_limited(client, monkeypatch):
+    monkeypatch.setattr(appmod, "LLM_KEY", "secret")
+    monkeypatch.setattr(appmod, "RATE_LIMITS", {"/api/ai/models": 1})
+    monkeypatch.setattr(appmod.socket, "getaddrinfo", lambda *a, **k: [(0, 0, 0, "", ("8.8.8.8", 443))])
+    monkeypatch.setattr(appmod, "_pinned_json_request", lambda *a, **k: {"data": [{"id": "a-model"}]})
+    appmod._rl_hits.clear()
+    try:
+        assert client.get("/api/ai/models").status_code == 200
+        r = client.get("/api/ai/models")
+        assert r.status_code == 429
+        assert r.headers.get("Retry-After") == "60"
     finally:
         appmod._rl_hits.clear()
 
@@ -748,7 +903,7 @@ def test_429_includes_retry_after(client, monkeypatch):
     monkeypatch.setattr(appmod, "RATE_LIMITS", {"/api/generate": 1})
     appmod._rl_hits.clear()
 
-    def boom(payload, retries=3):
+    def boom(payload, ai_settings=None, retries=3):
         raise RuntimeError("llm down")
     monkeypatch.setattr(appmod, "call_llm", boom)
     try:
@@ -870,7 +1025,7 @@ def test_room_set_streaks_action(client):
 # ---------------------------------------------------------------------------
 def test_chat_injects_language_directive(client, monkeypatch):
     captured = {}
-    def fake_llm(payload, retries=3):
+    def fake_llm(payload, ai_settings=None, retries=3):
         captured["system"] = payload["messages"][0]["content"]
         return '{"reply":"Hola mi amor","heat":null}'
     monkeypatch.setattr(appmod, "call_llm", fake_llm)
@@ -925,7 +1080,7 @@ def test_truth_avoid_list_blocks_used_questions():
 
 def test_generate_prompt_contains_seeds_and_avoid(client, monkeypatch):
     captured = {}
-    def fake_llm(payload, retries=3):
+    def fake_llm(payload, ai_settings=None, retries=3):
         captured["user"] = payload["messages"][1]["content"]
         return '{"text":"A fresh scene","steps":[{"instruction":"Something new","seconds":30}]}'
     monkeypatch.setattr(appmod, "call_llm", fake_llm)
@@ -938,7 +1093,7 @@ def test_generate_prompt_contains_seeds_and_avoid(client, monkeypatch):
 
 
 def test_generate_rejects_verbatim_repeat(client, monkeypatch):
-    def fake_llm(payload, retries=3):
+    def fake_llm(payload, ai_settings=None, retries=3):
         return '{"text":"The Slow Gaze","steps":[{"instruction":"Hold eye contact","seconds":30}]}'
     monkeypatch.setattr(appmod, "call_llm", fake_llm)
     body = {"chosen": "dare", "players": [{"name": "A"}, {"name": "B"}],

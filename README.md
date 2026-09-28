@@ -1,7 +1,8 @@
 # 🐴 Dirty Truth & Dare 🔥
 
 A private, mobile-first slow-burn truth-or-dare game for couples, powered by the
-**Cassia AI** engine (a local LLM) that generates every question and dare live.
+**Cassia AI** engine with an OpenAI-compatible provider layer (default:
+**Venice AI**) that generates every question and dare live.
 
 **Full spec:** see [PRD.md](PRD.md).
 
@@ -12,6 +13,9 @@ A private, mobile-first slow-burn truth-or-dare game for couples, powered by the
 - **Loading while crafting** — a themed spinner + pulsing Cassia avatar with
   rotating teasing lines whenever a challenge is generated; buttons lock so
   nothing double-fires.
+- **AI settings page** — Venice stays the default, hidden behind a settings
+  toggle; users can optionally enter their own OpenAI-compatible provider URL
+  + API key to fetch and pick a different model without exposing the server key.
 - **Player choice** — the target picks 💜 Truth or 🔥 Dare.
 - **3-and-3 rule** — three truths in a row force a dare AND three dares in a
   row force a truth; counters show 💜x/2 🔥x/2 per player.
@@ -118,7 +122,10 @@ vercel --prod
 ```
 Env vars — see **[.env.example](.env.example)** for the full annotated list; set
 them in the Vercel dashboard or `vercel env add <NAME> production`:
-- `LLM_URL` / `LLM_KEY` / `LLM_MODEL` — OpenAI-compatible LLM endpoint.
+- `LLM_KEY` — required for the default Venice setup.
+- `LLM_URL` / `LLM_MODEL` — optional overrides; defaults are Venice
+  `https://api.venice.ai/api/v1/chat/completions` and
+  `olafangensan-glm-4.7-flash-heretic`.
 - `TTS_URL` — public URL of the Kokoro TTS server (see "Voice on Vercel").
 - `DT_RL_*` — per-IP rate limits (optional; sane defaults baked in).
 
@@ -165,5 +172,5 @@ upstream services separately. Rate limits are disabled in the test suite
 (`conftest.py`) and covered by dedicated tests that re-enable them locally.
 
 ## Upstream dependencies (must be running)
-- LLM: OpenAI-compatible endpoint (Qwen3.8) — see `LLM_URL` in `app.py`.
+- LLM: OpenAI-compatible endpoint (default Venice AI) — see `LLM_URL` in `app.py`.
 - TTS: Kokoro server on `http://127.0.0.1:8880/v1/audio/speech` (or `TTS_URL`).

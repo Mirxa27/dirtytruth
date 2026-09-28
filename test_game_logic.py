@@ -121,6 +121,23 @@ def test_fallback_dare_is_multi_step():
             assert s["instruction"] and 5 <= s["seconds"] <= 180
         assert title
 
+def test_fallback_dare_stays_in_nearest_fresh_tier(monkeypatch):
+    monkeypatch.setattr("game_logic.FALLBACK_DARES", {
+        1: [("tier-1", [("soft step", 30), ("soft finish", 30)])],
+        2: [],
+        3: [("tier-3", [("mid step", 30), ("mid finish", 30)])],
+        4: [],
+        5: [],
+        6: [],
+        7: [],
+        8: [],
+        9: [("tier-9", [("wild step", 30), ("wild finish", 30)])],
+        10: [],
+    })
+    monkeypatch.setattr("game_logic.random.choice", lambda seq: seq[-1])
+    title, _steps = fallback_challenge("dare", 1, "Alex", "Sam", [])
+    assert title == "tier-1"
+
 def test_fallback_avoids_recent():
     seen = set()
     for i in range(6):

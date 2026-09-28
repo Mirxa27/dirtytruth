@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Dirty Truth & Dare — Flask backend with Cassia AI engine (v5.2, production)."""
 import json
+import ipaddress
 import os
 import re
+import socket
+from urllib.parse import urlparse, urlunparse
 import threading
 import time
 import requests
+import urllib3
 from flask import Flask, request, jsonify, send_from_directory
 
 from game_logic import (
@@ -53,9 +57,11 @@ def _load_secrets(path=None):
 
 _load_secrets()
 
-LLM_URL = os.environ.get("LLM_URL", "")
+DEFAULT_LLM_URL = "https://api.venice.ai/api/v1/chat/completions"
+DEFAULT_LLM_MODEL = "olafangensan-glm-4.7-flash-heretic"
+LLM_URL = os.environ.get("LLM_URL", DEFAULT_LLM_URL).strip() or DEFAULT_LLM_URL
 LLM_KEY = os.environ.get("LLM_KEY", "")
-LLM_MODEL = os.environ.get("LLM_MODEL", "local-model")
+LLM_MODEL = os.environ.get("LLM_MODEL", DEFAULT_LLM_MODEL).strip() or DEFAULT_LLM_MODEL
 TTS_URL = os.environ.get("TTS_URL", "http://127.0.0.1:8880/v1/audio/speech")
 TTS_VOICE = os.environ.get("TTS_VOICE", "af_heart")
 # Kokoro has no Arabic voice/training data — Arabic speech is served by
@@ -64,6 +70,166 @@ TTS_VOICE = os.environ.get("TTS_VOICE", "af_heart")
 TTS_AR_VOICE = os.environ.get("DT_TTS_AR_VOICE", "ar-SA-ZariyahNeural")
 EDGE_TTS_ENABLED = os.environ.get("DT_EDGE_TTS", "1") != "0"
 EDGE_TTS_TIMEOUT = float(os.environ.get("DT_EDGE_TTS_TIMEOUT", "9"))
+BLOCKED_LLM_HOSTS = {"localhost", "0.0.0.0"}
+BLOCKED_LLM_SUFFIXES = (".local", ".internal", ".lan", ".home", ".arpa")
+
+
+def _resolve_public_host(host, port):
+    """Resolve `host` and return only globally-routable addresses."""
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except socket.gaierror as e:
+        raise ValueError("AI provider host could not be resolved") from e
+    if not infos:
+        raise ValueError("AI provider host could not be resolved")
+    out, seen = [], set()
+    for info in infos:
+        addr = info[4][0]
+        try:
+            ip = ipaddress.ip_address(addr)
+        except ValueError as e:
+            raise ValueError("AI provider host is not allowed") from e
+        if not ip.is_global:
+            raise ValueError("AI provider host is not allowed")
+        if addr not in seen:
+            seen.add(addr)
+            out.append(addr)
+    return out
+
+
+def _assert_public_host(host, port):
+    """Reject loopback/private/reserved IPs even after DNS resolution."""
+    _resolve_public_host(host, port)
+
+
+def _trusted_llm_url(value):
+    """Allow request-scoped overrides only for the configured provider URL."""
+    normalized = _normalize_llm_url(value)
+    if normalized != _normalize_llm_url(LLM_URL):
+        raise ValueError("AI provider host is not allowed")
+    return normalized
+
+
+def _pinned_json_request(method, url, headers=None, json_body=None, timeout=30):
+    """Perform an HTTPS request pinned to already-validated DNS results."""
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").strip().lower()
+    port = parsed.port or 443
+    if parsed.scheme != "https" or not host:
+        raise ValueError("AI provider URL must use https")
+    path = parsed.path or "/"
+    if parsed.query:
+        path += "?" + parsed.query
+    request_headers = dict(headers or {})
+    request_headers["Host"] = host if port == 443 else f"{host}:{port}"
+    body = None
+    if json_body is not None:
+        body = json.dumps(json_body).encode("utf-8")
+        request_headers.setdefault("Content-Type", "application/json")
+    last_err = None
+    for addr in _resolve_public_host(host, port):
+        pool = urllib3.HTTPSConnectionPool(
+            addr,
+            port=port,
+            maxsize=1,
+            block=True,
+            assert_hostname=host,
+            server_hostname=host,
+            cert_reqs="CERT_REQUIRED",
+        )
+        try:
+            resp = pool.urlopen(
+                method,
+                path,
+                body=body,
+                headers=request_headers,
+                timeout=urllib3.Timeout(total=timeout),
+                retries=False,
+            )
+            if resp.status >= 400:
+                raise RuntimeError(f"provider returned HTTP {resp.status}")
+            return json.loads(resp.data.decode("utf-8"))
+        except Exception as e:
+            last_err = e
+        finally:
+            pool.close()
+    raise RuntimeError(f"provider request failed: {last_err}")
+
+
+def _clean_model_name(value):
+    """Short, header-safe model id used with OpenAI-compatible providers."""
+    cleaned = re.sub(r"[^\w./:-]+", "", str(value or "").strip())
+    return cleaned[:160]
+
+
+def _normalize_llm_url(value):
+    """Normalize a public HTTPS OpenAI-compatible chat-completions URL."""
+    raw = str(value or "").strip() or DEFAULT_LLM_URL
+    parsed = urlparse(raw)
+    host = (parsed.hostname or "").strip().lower()
+    if parsed.scheme != "https":
+        raise ValueError("AI provider URL must use https")
+    if not host:
+        raise ValueError("AI provider URL is missing a host")
+    if parsed.username or parsed.password:
+        raise ValueError("AI provider URL must not include credentials")
+    if host in BLOCKED_LLM_HOSTS or host.endswith(BLOCKED_LLM_SUFFIXES):
+        raise ValueError("AI provider host is not allowed")
+    try:
+        ip = ipaddress.ip_address(host)
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_multicast or ip.is_reserved or ip.is_unspecified):
+            raise ValueError("AI provider host is not allowed")
+    except ValueError as e:
+        if host == raw or "AI provider host is not allowed" in str(e):
+            raise
+    _assert_public_host(host, parsed.port or 443)
+    path = (parsed.path or "").rstrip("/")
+    if not path:
+        path = "/v1/chat/completions"
+    elif not path.endswith("/chat/completions"):
+        path = path + ("/chat/completions" if path.endswith("/v1") else "/v1/chat/completions")
+    return urlunparse((parsed.scheme, parsed.netloc, path, "", "", ""))
+
+
+def _models_url_for(chat_url):
+    parsed = urlparse(chat_url)
+    path = parsed.path.rstrip("/")
+    if path.endswith("/chat/completions"):
+        path = path[: -len("/chat/completions")] + "/models"
+    elif path.endswith("/v1"):
+        path = path + "/models"
+    elif not path:
+        path = "/v1/models"
+    else:
+        path = path + "/models"
+    return urlunparse((parsed.scheme, parsed.netloc, path, "", "", ""))
+
+
+def _clean_api_key(value):
+    """Opaque API key string supplied by the server config or the current user."""
+    return str(value or "").strip()[:500]
+
+
+def get_ai_settings(raw=None):
+    """Resolve request-scoped AI settings, preferring a user key when supplied."""
+    raw = raw if hasattr(raw, "get") else {}
+    out = {"url": LLM_URL, "model": LLM_MODEL, "api_key": _clean_api_key(LLM_KEY), "custom_key": False}
+    user_key = _clean_api_key(raw.get("apiKey") or raw.get("api_key"))
+    raw_url = str(raw.get("url", "")).strip()
+    url_ok = not raw_url
+    try:
+        if raw_url:
+            out["url"] = _normalize_llm_url(raw_url) if user_key else _trusted_llm_url(raw_url)
+            url_ok = True
+    except ValueError:
+        pass
+    if user_key and url_ok:
+        out["api_key"] = user_key
+        out["custom_key"] = True
+    model = _clean_model_name(raw.get("model")) or out["model"]
+    out["model"] = model
+    return out
 
 
 def tts_via_edge(text, voice=None):
@@ -100,6 +266,7 @@ def tts_via_edge(text, voice=None):
 RATE_LIMITS = {
     "/api/generate": int(os.environ.get("DT_RL_GENERATE", "12") or 0),   # per minute
     "/api/chat": int(os.environ.get("DT_RL_CHAT", "20") or 0),
+    "/api/ai/models": int(os.environ.get("DT_RL_AI_MODELS", "20") or 0),
     "/api/tts": int(os.environ.get("DT_RL_TTS", "20") or 0),
     # Room codes are only 4 chars (~1M combos) — keep join tight vs brute force.
     "/api/room/create": int(os.environ.get("DT_RL_ROOM_CREATE", "10") or 0),
@@ -212,7 +379,10 @@ GENERAL RULES:
 - Address the target by name. Use the partner's name when they must act.
 - Match the heat level EXACTLY. If heat is 3, do NOT write sex acts. If heat is 9, do NOT write mere eye contact.
 - Never repeat or rephrase recent challenges.
+- Every output must feel bespoke, cinematic, and surprising — avoid generic filler unless you make it distinctive with context, pacing, body language, and intent.
 - Write for beginners: specific, physical, explainable — exactly what to do, where, how, how slowly, what to feel, what to say.
+- Prefer a clear emotional arc: anticipation → escalation → payoff.
+- Rotate the flavor of the scene: teasing, praise, control, vulnerability, playfulness, worship, service, sensory focus, verbal confession, and aftercare when the heat allows.
 - Respond with STRICT JSON ONLY, no markdown, no commentary."""
 
 TRUTH_PROMPT = BASE_PROMPT + """
@@ -228,6 +398,7 @@ CHALLENGE TYPE: TRUTH — DIRTY SECRETS EXPLORATION. A truth is a QUESTION the t
 - Heat 9-10 truths: the most explicit, detailed, raw secret or fantasy they've never said out loud to anyone — the deepest, darkest, most vulnerable thing they carry.
 - The question must demand a DETAILED answer (ask for specifics: where, how, what exactly, what they'd say, every detail).
 - Make each question feel like a natural, surprising discovery — the partner should not have seen it coming.
+- A great truth has a hook: a specific memory, scene, fear, craving, comparison, or fantasy that forces a juicy answer instead of a yes/no.
 - Format: ONE question, phrased directly to the target by name. Just the question itself — no prefix, no "Answer out loud".
 
 Respond with STRICT JSON ONLY:
@@ -241,6 +412,8 @@ CHALLENGE TYPE: DARE. A dare is a SEQUENCE OF PHYSICAL ACTIONS the target must p
 - Steps must be specific and explainable to a beginner: exactly what to do, where, how, how slowly, what to feel, what to say.
 - Keep each step under 45 words — vivid but concise. No rambling.
 - The target player performs the steps; the partner reacts/watches/participates as instructed.
+- Build a mini-scene, not a loose list: each step should escalate the previous one and shift the energy.
+- Use distinct textures across challenges (voice, breath, teasing pauses, obedience, body worship, positioning, dirty talk, aftercare) when the heat level fits.
 
 Respond with STRICT JSON ONLY:
 {"text": "one-line title of the challenge (max 12 words)", "steps": [{"instruction": "detailed step", "seconds": 30}, ...]}"""
@@ -255,24 +428,100 @@ Respond with STRICT JSON ONLY:
 {"reply": "your message", "heat": <int or null>, "question": <string or null>, "type": <"truth"|"dare" or null>}"""
 
 
+TRUTH_STYLE_SEEDS = {
+    1: [
+        "a hidden first impression or private compliment they never admitted",
+        "a tiny desire they replay in their head when they miss their partner",
+        "a sweet secret they noticed in silence and kept to themselves",
+    ],
+    3: [
+        "a body-part fixation or kiss they keep imagining",
+        "the exact words they wish they had whispered in a heated moment",
+        "a secret turn-on triggered by voice, scent, or confidence",
+    ],
+    5: [
+        "a detailed fantasy scene they have never said out loud",
+        "a foreplay craving with exact actions, pace, and words",
+        "a risky desire that scares them because they want it badly",
+    ],
+    7: [
+        "their dirtiest memory, including the detail they still replay",
+        "the exact control, edging, or teasing scenario they crave most",
+        "a secret comparison between what they have done and what they ache to do next",
+    ],
+    9: [
+        "their most forbidden fantasy with explicit detail and vulnerability",
+        "the filthiest thing they want their partner to do, described moment by moment",
+        "the confession they would only reveal when completely overwhelmed by desire",
+    ],
+}
+
+DARE_STYLE_SEEDS = {
+    1: [
+        "a charged eye-contact ritual with teasing pauses",
+        "a light-touch scene focused on anticipation instead of payoff",
+        "a playful command-and-response moment that builds nervous excitement",
+    ],
+    3: [
+        "a slow kiss-and-whisper sequence with deliberate restraint",
+        "a body-worship dare focused on neck, chest, and breath",
+        "a teasing undress or guided touch sequence with lots of suspense",
+    ],
+    5: [
+        "a hungry make-out scene that turns into hands-on foreplay",
+        "a power-shift dare where one partner gives step-by-step instructions",
+        "a sensual worship challenge with pauses that make the partner beg for more",
+    ],
+    7: [
+        "a dominant scene with commands, denial, and intense eye contact",
+        "a sensory-focused foreplay sequence using restraint, praise, or obedience",
+        "a roleplay-style moment where one partner fully takes control",
+    ],
+    9: [
+        "a relentless explicit scene with control, pace changes, and payoff",
+        "a raw high-heat scene that mixes obedience, filthy talk, and aftercare",
+        "an extreme fantasy sequence that still remains clear and step-by-step",
+    ],
+}
+
+
+def _style_tier_for_heat(heat):
+    heat = max(1, min(10, int(heat)))
+    if heat <= 2:
+        return 1
+    if heat <= 4:
+        return 3
+    if heat <= 6:
+        return 5
+    if heat <= 8:
+        return 7
+    return 9
+
+
+def _sample_style_block(chosen, heat):
+    bank = TRUTH_STYLE_SEEDS if chosen == "truth" else DARE_STYLE_SEEDS
+    seeds = bank.get(_style_tier_for_heat(heat), ())
+    if not seeds:
+        return ""
+    picks = random.sample(list(seeds), min(3, len(seeds)))
+    label = "CONFESSION ANGLES" if chosen == "truth" else "SCENE ANGLES"
+    return label + " — surprise them with ONE of these energies:\n" + "".join(f"- {s}\n" for s in picks)
+
+
 # ---------------------------------------------------------------------------
 # LLM plumbing
 # ---------------------------------------------------------------------------
-def call_llm(payload, retries=3):
+def call_llm(payload, ai_settings=None, retries=3):
     payload = dict(payload)
-    # Qwen3.8 is a thinking model — disable reasoning for fast, clean JSON output
-    payload.setdefault("chat_template_kwargs", {"enable_thinking": False})
+    ai = ai_settings or get_ai_settings()
+    payload["model"] = _clean_model_name(payload.get("model")) or ai["model"]
+    headers = {"Content-Type": "application/json"}
+    if ai.get("api_key"):
+        headers["Authorization"] = "Bearer " + ai["api_key"]
     last_err = None
     for attempt in range(retries):
         try:
-            r = requests.post(
-                LLM_URL,
-                headers={"Authorization": f"Bearer {LLM_KEY}", "Content-Type": "application/json"},
-                json=payload,
-                timeout=120,
-            )
-            r.raise_for_status()
-            d = r.json()
+            d = _pinned_json_request("POST", ai["url"], headers=headers, json_body=payload, timeout=120)
             content = d["choices"][0]["message"]["content"]
             if content and content.strip():
                 return content
@@ -339,6 +588,46 @@ def index():
 @app.route("/api/health")
 def health():
     return jsonify({"ok": True, "engine": "Cassia AI", "t": int(time.time())})
+
+
+@app.route("/api/ai/config")
+def ai_config():
+    ai = get_ai_settings()
+    return jsonify({
+        "provider_url": ai["url"],
+        "model": ai["model"],
+        "provider_type": "openai-compatible",
+        "apiKeyConfigured": bool(ai["api_key"]),
+    })
+
+
+@app.route("/api/ai/models", methods=["GET", "POST"])
+def ai_models():
+    if _rate_limited("/api/ai/models"):
+        return _too_many()
+    raw = (request.get_json(force=True, silent=True) or {}) if request.method == "POST" else request.args
+    raw_url = str(raw.get("url", "")).strip() if hasattr(raw, "get") else ""
+    raw_key = _clean_api_key(raw.get("apiKey") or raw.get("api_key")) if hasattr(raw, "get") else ""
+    try:
+        if raw_url:
+            _normalize_llm_url(raw_url) if raw_key else _trusted_llm_url(raw_url)
+    except ValueError:
+        return jsonify({"error": "invalid provider url"}), 400
+    ai = get_ai_settings(raw)
+    if not ai["api_key"]:
+        return jsonify({"error": "API key is required for that provider", "apiKeyConfigured": False}), 503
+    headers = {"Authorization": "Bearer " + ai["api_key"], "Content-Type": "application/json"}
+    try:
+        data = _pinned_json_request("GET", _models_url_for(ai["url"]), headers=headers, timeout=30).get("data")
+        if not isinstance(data, list):
+            raise RuntimeError("unexpected model response")
+        models = sorted({
+            _clean_model_name(item.get("id"))
+            for item in data if isinstance(item, dict) and _clean_model_name(item.get("id"))
+        })
+        return jsonify({"models": models, "selected": ai["model"], "apiKeyConfigured": True})
+    except Exception:
+        return jsonify({"error": "could not load provider models", "apiKeyConfigured": True}), 502
 
 
 @app.route("/api/tts", methods=["POST"])
@@ -415,7 +704,7 @@ def _prefs_block(prefs, target):
     return "\n".join(parts) + "\n"
 
 
-def _translate_challenge(title, steps, lang_code):
+def _translate_challenge(title, steps, lang_code, ai_settings=None):
     """Second LLM pass: translate a generated challenge into the target language.
 
     The base model is English-dominant, so a dedicated translation pass is the
@@ -442,7 +731,7 @@ def _translate_challenge(title, steps, lang_code):
             "temperature": 0.4,
             "top_p": 0.9,
             "max_tokens": 1200,
-        })
+        }, ai_settings=ai_settings)
         obj = parse_json(raw)
         t_title = str(obj.get("title", "")).strip()
         t_steps = obj.get("steps")
@@ -468,6 +757,7 @@ def generate():
     chosen = "dare" if str(data.get("chosen", "truth")).lower() == "dare" else "truth"
     target = str(data.get("target", "you"))[:30].strip() or "you"
     lang = get_lang(data.get("lang", "en"))
+    ai = get_ai_settings(data.get("ai"))
     prefs = data.get("prefs") if isinstance(data.get("prefs"), dict) else {}
     try:
         heat = max(1, min(10, int(data.get("heat", 3))))
@@ -500,6 +790,7 @@ def generate():
             "NEVER copy a seed verbatim):\n"
             + "".join(f"- {s}\n" for s in seeds)
         )
+    style_block = _sample_style_block(chosen, eff_heat)
     avoid_block = (
         "ALREADY SERVED — your output must be completely different from every "
         f"one of these (no repeats, no light rephrasing): {json.dumps(avoid)}\n"
@@ -523,6 +814,7 @@ def generate():
         f"Game round: {round_no} (early rounds = build tension slowly)\n"
         f"Recent challenges (do NOT repeat or rephrase these): {json.dumps(recent) if recent else 'none — this is the first challenge'}\n"
         + seeds_block
+        + (style_block + "\n" if style_block else "")
         + avoid_block
         + (prefs_block + "\n" if prefs_block else "")
         + lang_reminder
@@ -530,7 +822,7 @@ def generate():
     )
     try:
         raw = call_llm({
-            "model": LLM_MODEL,
+            "model": ai["model"],
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
@@ -538,7 +830,7 @@ def generate():
             "temperature": 0.95,
             "top_p": 0.95,
             "max_tokens": 1600,
-        })
+        }, ai_settings=ai)
         obj = parse_json(raw)
         norm = normalize_steps(obj, eff_heat)
         if norm:
@@ -552,7 +844,7 @@ def generate():
                 if avoid_set and any(dup_key[:60] == a[:60] or a[:60] in dup_key for a in avoid_set):
                     raise RuntimeError("duplicate of an already-served prompt")
                 if lang["code"] != "en":
-                    vtitle, vsteps = _translate_challenge(vtitle, vsteps, lang["code"])
+                    vtitle, vsteps = _translate_challenge(vtitle, vsteps, lang["code"], ai_settings=ai)
                 return jsonify({"type": chosen, "title": vtitle, "steps": vsteps, "heat": eff_heat, "engine": "cassia", "phase": phase["name"]})
         # LLM returned nothing usable -> fall through to the real fallback
     except Exception:
@@ -560,7 +852,7 @@ def generate():
     # Real, complete fallback content — never a stub (also avoids repeats)
     title, steps = fallback_challenge(chosen, heat, target, partner_name, recent, avoid)
     if lang["code"] != "en":
-        title, steps = _translate_challenge(title, steps, lang["code"])
+        title, steps = _translate_challenge(title, steps, lang["code"], ai_settings=ai)
     return jsonify({"type": chosen, "title": title, "steps": steps, "heat": eff_heat, "engine": "fallback", "phase": phase["name"]})
 
 
@@ -576,6 +868,7 @@ def chat():
     target = data.get("target")
     target = str(target)[:30] if target else None
     lang = get_lang(data.get("lang", "en"))
+    ai = get_ai_settings(data.get("ai"))
     try:
         heat = max(1, min(10, int(data.get("heat", 3))))
     except (TypeError, ValueError):
@@ -598,14 +891,14 @@ def chat():
     )
     try:
         raw = call_llm({
-            "model": LLM_MODEL,
+            "model": ai["model"],
             "messages": [
                 {"role": "system", "content": lang_rule + CHAT_PROMPT + "\n" + lang_reminder},
                 {"role": "user", "content": user},
             ],
             "temperature": 0.9,
             "max_tokens": 1000,
-        })
+        }, ai_settings=ai)
         obj = parse_json(raw)
         reply = str(obj.get("reply", "")).strip() or "Mmm, take your time with me."
         out = {"reply": reply, "engine": "cassia"}
@@ -625,14 +918,14 @@ def chat():
             + (f" Respond ONLY in {lang['name']}." if lang["code"] != "en" else "")
         )
         raw = call_llm({
-            "model": LLM_MODEL,
+            "model": ai["model"],
             "messages": [
                 {"role": "system", "content": plain_system},
                 {"role": "user", "content": msg},
             ],
             "temperature": 0.9,
             "max_tokens": 300,
-        })
+        }, ai_settings=ai)
         return jsonify({"reply": raw.strip()[:400] or "Mmm, take your time with me.", "engine": "cassia-plain"})
     except Exception as e2:
         # localizable last resort so silence never looks like the app froze
